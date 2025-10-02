@@ -459,35 +459,41 @@ class Answer(BaseModel):
 # -------------------------------
 @app.get("/api/answers-all")
 def get_all_answers():
+    cursor = None
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT answer_id, student_id, exam_year, essay_text, essay_analysis, group_id, status,score
+            SELECT answer_id, student_id, exam_year, essay_text, essay_analysis, group_id, status, score
             FROM answer
             ORDER BY answer_id DESC
         """)
         rows = cursor.fetchall()
-        cursor.close()
-        results = [
-            {
+
+        results = []
+        for r in rows:
+            results.append({
                 "answer_id": r[0],
                 "student_id": r[1],
                 "exam_year": r[2],
                 "essay_text": r[3],
                 "essay_analysis": r[4],
                 "group_id": r[5],
-                "status": r[6]
-            }
-            for r in rows
-        ]
+                "status": r[6],
+                "score": r[7] if r[7] is not None else None
+            })
         return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
 
 
 # ✅ API: ตรวจคำตอบด้วย AI
+# ✅ API: ตรวจคำตอบด้วย AI (เวอร์ชันสุดท้ายที่แก้ไขตาม Log จริง)
 @app.post("/api/check-answer/{answer_id}")
 async def check_answer(answer_id: int):
+    cursor = None
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT essay_text, essay_analysis FROM answer WHERE answer_id = %s", (answer_id,))
@@ -497,35 +503,60 @@ async def check_answer(answer_id: int):
 
         essay_text, essay_analysis = row
 
-        # ✅ เรียก AI
-        result = evaluate_single_answer(essay_text, essay_analysis)
-
-        if not isinstance(result, dict):
-            result_dict = json.loads(result)
-        else:
-            result_dict = result
-
-        # ✅ แปลงโครงสร้างให้ตรงกับที่ Frontend ต้องการ
-        formatted_description = {}
-        total_score = 0
+        # 1. เรียก AI และรับผลลัพธ์เป็น Dictionary
+        ai_result_dict = evaluate_single_answer(essay_text, essay_analysis)
         
-        # วนลูปสร้าง s1-s13 จากผลลัพธ์ AI
-        for i in range(1, 14):
-            key = f"s{i}"
-            score_key = f"เกณฑ์ที่ {i}"  # หรือชื่อที่ AI ส่งมา เช่น "คะแนนข้อ {i}"
-            
-            # ดึงคะแนนและ feedback จาก AI
-            score = result_dict.get(score_key, {}).get("score", 0)
-            feedback = result_dict.get(score_key, {}).get("feedback", "-")
-            
-            formatted_description[key] = {
-                "score": score,
-                "feedback": feedback
+        # Log ผลดิบไว้เผื่อตรวจสอบในอนาคต
+        print("AI raw result for answer_id", answer_id, ":", json.dumps(ai_result_dict, indent=2, ensure_ascii=False))
+
+        # 2. ฟังก์ชันแปลงผลลัพธ์สำหรับโครงสร้าง JSON แบบ "แบน" (Flat)
+        def map_ai_results_to_s_format(results):
+            formatted_desc = {}
+
+            # *** สร้าง Mapping ของ Key ที่ถูกต้อง 100% จาก Log ***
+            # หมายเหตุ: s3 มี key ที่ผิดปกติจาก AI แต่เราต้องใช้ตามนั้น
+            key_mapping = {
+                "s1": "ข้อที่ 1 - ใจความสำคัญ",
+                "s2": "ข้อที่ 1 - การเรียงลำดับและเชื่อมโยงความคิด",
+                "s3": "ข้อที่ 1 - ความถูกต้องตามหลักการเขียนย่อความ",
+                "s4": "ข้อที่ 1 - การสะกดคำ",
+                "s5": "ข้อที่ 1 - การใช้คำ/ถ้อยคำสำนวน",
+                "s6": "ข้อที่ 1 - การใช้ประโยค",
+                "s7": "ข้อที่ 2 - คำบอกข้อคิดเห็น",
+                "s8": "ข้อที่ 2 - เหตุผลสนับสนุน",
+                "s9": "ข้อที่ 2 - การเรียงลำดับและเชื่อมโยงความคิด",
+                "s10": "ข้อที่ 2 - ความถูกต้องตามหลักการแสดงความคิดเห็น",
+                "s11": "ข้อที่ 2 - การสะกดคำ/การใช้ภาษา",
+                "s12": "ข้อที่ 2 - การใช้คำ/ถ้อยคำสำนวน",
+                "s13": "ข้อที่ 2 - การใช้ประโยค",
             }
             
-            total_score += float(score)
+            # วน Loop เพื่อดึงค่าของแต่ละ S
+            for s_key, ai_key in key_mapping.items():
+                # ดึงข้อมูลจาก top-level dictionary โดยตรง
+                data = results.get(ai_key, {}) 
+                
+                # AI อาจจะส่ง score มาใน key ชื่อ 'score' หรือ 'คะแนน'
+                score = data.get("score", data.get("คะแนน", 0.0))
+                
+                # ใช้ 'details' เป็น feedback ถ้ามี, ถ้าไม่มีก็ใช้ object ทั้งหมด
+                feedback_data = data.get("details", data)
+                
+                formatted_desc[s_key] = {
+                    "score": float(score),
+                    "feedback": json.dumps(feedback_data, ensure_ascii=False)
+                }
+            
+            # ดึงคะแนนรวมทั้งหมด
+            total_score_key = "คะแนนรวมทั้งหมด (30 คะแนน)"
+            total_score = results.get(total_score_key, 0.0)
 
-        # ✅ บันทึกลงฐานข้อมูล
+            return formatted_desc, float(total_score)
+
+        # 3. เรียกใช้ฟังก์ชันแปลงค่า
+        formatted_description, total_score = map_ai_results_to_s_format(ai_result_dict)
+        
+        # 4. บันทึกลงฐานข้อมูล
         cursor.execute("""
             UPDATE answer
             SET score=%s,
@@ -533,7 +564,7 @@ async def check_answer(answer_id: int):
                 description=%s
             WHERE answer_id = %s
         """, (total_score, json.dumps(formatted_description, ensure_ascii=False), answer_id))
-
+        
         conn.commit()
 
         return {
@@ -543,10 +574,14 @@ async def check_answer(answer_id: int):
         }
 
     except Exception as e:
-        conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        if conn:
+            conn.rollback()
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"เกิดข้อผิดพลาด: {str(e)}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 
 # -----------------------------
