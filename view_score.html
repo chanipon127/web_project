@@ -289,7 +289,6 @@
         const statusElement = document.getElementById("status");
         statusElement.textContent = data.status || "ยังไม่ตรวจ";
         statusElement.className = "status " + (data.status === 'ตรวจแล้ว' ? 'checked' : 'unchecked');
-        document.getElementById("totalScoreAI").textContent = data.score != null ? data.score.toFixed(1) : "0";
         document.getElementById("essayText").textContent = data.essay_text || "ไม่มีข้อมูล";
         document.getElementById("essayAnalysis").textContent = data.essay_analysis || "ไม่มีข้อมูล";
 
@@ -304,6 +303,35 @@
           console.error("❌ Error parsing description:", e);
         }
 
+        // 🔥 เพิ่มโค้ดแก้ไขคะแนนตรงนี้
+        Object.keys(parsedDescription).forEach(key => {
+          const item = parsedDescription[key];
+          if (item.score === 0 && item.feedback) {
+            try {
+              const feedbackObj = typeof item.feedback === 'string' ? JSON.parse(item.feedback) : item.feedback;
+
+              if (key === 's1' && feedbackObj['คะแนนรวม'] != null) {
+                item.score = parseFloat(feedbackObj['คะแนนรวม']);
+                console.log(`🔧 แก้ไข ${key}: 0 → ${item.score}`);
+              }
+
+              if (key === 's8' && feedbackObj.score_total != null) {
+                item.score = parseFloat(feedbackObj.score_total);
+                console.log(`🔧 แก้ไข ${key}: 0 → ${item.score}`);
+              }
+
+              if ((key === 's3' || key === 's10') && feedbackObj.score != null && item.score === 0) {
+                item.score = parseFloat(feedbackObj.score);
+                console.log(`🔧 แก้ไข ${key}: 0 → ${item.score}`);
+              }
+
+            } catch (e) {
+              console.warn(`⚠️ ไม่สามารถ parse feedback ของ ${key}:`, e);
+            }
+          }
+        });
+
+        // ต่อด้วยโค้ดเดิม...
         let teacherScores = {};
         try {
           if (data.teacher_scores) {
@@ -313,6 +341,18 @@
         } catch (e) {
           console.error("❌ Error parsing teacher_scores:", e);
         }
+
+        // 🔥 คำนวณคะแนนรวม AI
+        let totalAIScore = 0;
+        Object.keys(parsedDescription).forEach(key => {
+          if (key.startsWith('s') && parsedDescription[key]?.score != null) {
+            totalAIScore += parseFloat(parsedDescription[key].score);
+          }
+        });
+
+        console.log("📊 คะแนนรวม AI:", totalAIScore);
+        document.getElementById("totalScoreAI").textContent = totalAIScore.toFixed(1);
+
 
         // ========== สร้างตาราง ==========
         const feedbackTable = document.getElementById("feedbackTable");
@@ -324,7 +364,8 @@
           { type: 'summary', part: 1 },
           { type: 'header', text: '--- ข้อที่ 2: การแสดงความคิดเห็น (20 คะแนน) ---' },
           "s7", "s8", "s9", "s10", "s11", "s12", "s13",
-          { type: 'summary', part: 2 }
+          { type: 'summary', part: 2 },
+          { type: 'grand_total' }  // 🔥 เพิ่มบรรทัดนี้
         ];
 
         const criteriaNameMapping = {
@@ -368,6 +409,26 @@
                     <td>-</td>
                 `;
               feedbackTable.appendChild(summaryRow);
+            }
+            // 🔥 เพิ่มส่วนนี้
+            else if (item.type === 'grand_total') {
+              const grandTotalRow = document.createElement("tr");
+              grandTotalRow.style.background = "#d4edda";
+              grandTotalRow.style.fontWeight = "bold";
+              grandTotalRow.style.fontSize = "16px";
+
+              const totalAI = totals.ai.part1 + totals.ai.part2;
+              const totalT1 = totals.teacher1.part1 + totals.teacher1.part2;
+              const totalT2 = totals.teacher2.part1 + totals.teacher2.part2;
+
+              grandTotalRow.innerHTML = `
+        <td style="text-align: center; background-color: #28a745; color: white;">🏆 คะแนนรวมทั้งหมด (30 คะแนน)</td>
+        <td class="score-cell" style="background-color: #d1ecf1; color: #004085; font-size: 18px;">${totalAI.toFixed(1)}</td>
+        <td class="score-cell" style="background-color: #d4edda; color: #155724; font-size: 18px;">${totalT1 > 0 ? totalT1.toFixed(1) : '-'}</td>
+        <td class="score-cell" style="background-color: #d4edda; color: #155724; font-size: 18px;">${totalT2 > 0 ? totalT2.toFixed(1) : '-'}</td>
+        <td style="background-color: #d4edda;">-</td>
+      `;
+              feedbackTable.appendChild(grandTotalRow);
             }
             return;
           }
