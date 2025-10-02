@@ -200,7 +200,12 @@
 
     // ========== ฟังก์ชันย้อนกลับ ==========
     function goBack() {
-      window.location.href = "check_exam.html";
+      // หากมีหน้าก่อนหน้าใน history ให้ย้อนกลับ, ถ้าไม่มีให้ไปที่ check_exam.html
+      if (document.referrer) {
+        window.history.back();
+      } else {
+        window.location.href = "check_exam.html";
+      }
     }
 
     // ========== ตรวจสอบ answer_id ==========
@@ -223,260 +228,190 @@
       `;
     }
 
-    // ✅ ฟังก์ชันแมพเกณฑ์ AI กับ s1-s13 (แก้ไขตามที่ระบุ)
-    function getCriteriaMapping() {
-      return {
-        "ข้อที่ 1 - ใจความสำคัญ": "s1",
-        "ข้อที่ 1 - ความถูกต้องตามหลักการเขียนย่อความ": "s3",
-        "ข้อที่ 1 - การสะกดคำ": "s4",
-        "ข้อที่ 2 - คำบอกข้อคิดเห็น": "s7",
-        "ข้อที่ 2 - ความถูกต้องตามหลักการแสดงความคิดเห็น": "s10"
-      };
-    }
-
     async function loadAnswer(answerId) {
       try {
         const res = await fetch(`${API_BASE_URL}/api/view-score/${answerId}`);
 
         if (!res.ok) {
-          throw new Error(`HTTP ${res.status}: ไม่สามารถดึงข้อมูลได้`);
+          const errorData = await res.json().catch(() => null);
+          throw new Error(`HTTP ${res.status}: ${errorData?.detail || 'ไม่สามารถดึงข้อมูลได้'}`);
         }
 
         const data = await res.json();
 
+        // แสดงผล Log เพื่อตรวจสอบ
         console.log("=== ข้อมูลทั้งหมดจาก API ===");
-        console.log("data:", data);
+        console.log("Data received:", data);
         console.log("description (raw):", data.description);
         console.log("teacher_scores (raw):", data.teacher_scores);
 
+        // สร้างโครงสร้างหน้าเว็บหลัก
         const container = document.getElementById('mainContainer');
         container.innerHTML = `
-      <button class="btn-back" onclick="goBack()">
-        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-          <path fill-rule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z"/>
-        </svg>
-        ย้อนกลับ
-      </button>
-
-      <h1>📋 ผลการตรวจคำตอบนักเรียน</h1>
-
-      <div class="info-section">
-        <h2>ข้อมูลนักเรียน</h2>
-        <div class="info-grid">
-          <div class="info-item">
-            <strong>รหัสนักเรียน:</strong>
-            <span id="studentId">-</span>
+          <button class="btn-back" onclick="goBack()">← ย้อนกลับ</button>
+          <h1>📋 ผลการตรวจคำตอบนักเรียน</h1>
+          <div class="info-section">
+            <h2>ข้อมูลนักเรียน</h2>
+            <p><strong>รหัสนักเรียน:</strong> <span id="studentId">-</span></p>
+            <p><strong>ชั้นเรียน:</strong> <span id="groupId">-</span></p>
+            <p><strong>ปีการศึกษา:</strong> <span id="examYear">-</span></p>
+            <p><strong>สถานะ:</strong> <span id="status" class="status">-</span></p>
+            <p><strong>คะแนนรวม AI:</strong> <span id="totalScoreAI" class="score">0</span></p>
           </div>
-          <div class="info-item">
-            <strong>ชั้นเรียน:</strong>
-            <span id="groupId">-</span>
+          <h2>📝 คำตอบนักเรียน</h2>
+          <div class="info-section">
+            <strong>ข้อ 1: จงเขียนย่อความจากบทอ่าน</strong>
+            <pre id="essayText">กำลังโหลด...</pre>
+            <strong style="display:block; margin-top:20px;">ข้อ 2: วิเคราะห์/แสดงความคิดเห็น</strong>
+            <pre id="essayAnalysis">กำลังโหลด...</pre>
           </div>
-          <div class="info-item">
-            <strong>ปีการศึกษา:</strong>
-            <span id="examYear">-</span>
-          </div>
-          <div class="info-item">
-            <strong>สถานะ:</strong>
-            <span id="status" class="status">-</span>
-          </div>
-          <div class="info-item">
-            <strong>คะแนนรวม AI:</strong>
-            <span id="score" class="score">0</span>
-          </div>
-        </div>
-      </div>
-
-      <h2>📝 คำตอบนักเรียน</h2>
-      <div class="info-section">
-        <strong>ข้อ 1: บรรยายภาพที่ให้มา</strong>
-        <div class="essay-box" id="essayText">กำลังโหลด...</div>
-
-        <strong style="display:block; margin-top:20px;">ข้อ 2: วิเคราะห์/แสดงความคิดเห็น</strong>
-        <div class="essay-box" id="essayAnalysis">กำลังโหลด...</div>
-      </div>
-
-      <h3>📊 รายละเอียดการตรวจ</h3>
-      <table>
-        <thead>
-          <tr>
-            <th style="width: 350px;">เกณฑ์การตรวจ</th>
-            <th class="ai-header" style="width: 100px;">คะแนน AI</th>
-            <th class="teacher-header" style="width: 100px;">ครู 1</th>
-            <th class="teacher-header" style="width: 100px;">ครู 2</th>
-            <th>รายละเอียด</th>
-          </tr>
-        </thead>
-        <tbody id="feedbackTable">
-          <tr><td colspan="5" style="text-align:center;">กำลังโหลด...</td></tr>
-        </tbody>
-      </table>
-    `;
+          <h3>📊 รายละเอียดการตรวจ</h3>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 350px;">เกณฑ์การตรวจ</th>
+                <th class="score-cell" style="width: 100px;">คะแนน AI</th>
+                <th class="score-cell" style="width: 100px;">ครู 1</th>
+                <th class="score-cell" style="width: 100px;">ครู 2</th>
+                <th>รายละเอียด (Feedback)</th>
+              </tr>
+            </thead>
+            <tbody id="feedbackTable">
+              <tr><td colspan="5" style="text-align:center;">กำลังโหลด...</td></tr>
+            </tbody>
+          </table>
+        `;
 
         // กรอกข้อมูลทั่วไป
         document.getElementById("studentId").textContent = data.student_id || "-";
         document.getElementById("groupId").textContent = data.group_id || "-";
         document.getElementById("examYear").textContent = data.exam_year || "-";
-
         const statusElement = document.getElementById("status");
         statusElement.textContent = data.status || "ยังไม่ตรวจ";
         statusElement.className = "status " + (data.status === 'ตรวจแล้ว' ? 'checked' : 'unchecked');
-
-        document.getElementById("score").textContent = data.score != null ? data.score : "0";
+        document.getElementById("totalScoreAI").textContent = data.score != null ? data.score.toFixed(1) : "0";
         document.getElementById("essayText").textContent = data.essay_text || "ไม่มีข้อมูล";
         document.getElementById("essayAnalysis").textContent = data.essay_analysis || "ไม่มีข้อมูล";
 
-        // ========== แปลง description ==========
-        let description = {};
+        // ========== แปลงข้อมูล JSON ==========
+        let parsedDescription = {};
         try {
           if (data.description) {
-            if (typeof data.description === 'string') {
-              description = JSON.parse(data.description);
-            } else if (typeof data.description === 'object') {
-              description = data.description;
-            }
+            parsedDescription = typeof data.description === 'string' ? JSON.parse(data.description) : data.description;
           }
-          console.log("✅ Parsed description:", description);
+          console.log("✅ Parsed description:", parsedDescription);
         } catch (e) {
           console.error("❌ Error parsing description:", e);
-          description = {};
         }
 
-        // ========== แปลง teacher_scores ==========
         let teacherScores = {};
         try {
           if (data.teacher_scores) {
-            if (typeof data.teacher_scores === 'string') {
-              teacherScores = JSON.parse(data.teacher_scores);
-            } else if (typeof data.teacher_scores === 'object') {
-              teacherScores = data.teacher_scores;
-            }
+            teacherScores = typeof data.teacher_scores === 'string' ? JSON.parse(data.teacher_scores) : data.teacher_scores;
           }
           console.log("✅ Parsed teacherScores:", teacherScores);
         } catch (e) {
           console.error("❌ Error parsing teacher_scores:", e);
-          teacherScores = {};
         }
 
         // ========== สร้างตาราง ==========
         const feedbackTable = document.getElementById("feedbackTable");
-        feedbackTable.innerHTML = "";
+        feedbackTable.innerHTML = ""; // เคลียร์ตารางเก่า
 
         const criteriaOrder = [
-          "ข้อที่ 1 - ใจความสำคัญ",
-          "ข้อที่ 1 - ความถูกต้องตามหลักการเขียนย่อความ",
-          "ข้อที่ 1 - การสะกดคำ",
-          "ข้อที่ 2 - คำบอกข้อคิดเห็น",
-          "ข้อที่ 2 - ความถูกต้องตามหลักการแสดงความคิดเห็น",
-          "คะแนนรวมข้อที่ 1",
-          "คะแนนรวมข้อที่ 2",
-          "คะแนนรวมทั้งหมด (15 คะแนน)"
+          { type: 'header', text: '--- ข้อที่ 1: การเขียนย่อความ (10 คะแนน) ---' },
+          "s1", "s2", "s3", "s4", "s5", "s6",
+          { type: 'summary', part: 1 },
+          { type: 'header', text: '--- ข้อที่ 2: การแสดงความคิดเห็น (20 คะแนน) ---' },
+          "s7", "s8", "s9", "s10", "s11", "s12", "s13",
+          { type: 'summary', part: 2 }
         ];
 
-        const mapping = getCriteriaMapping();
-        let totalAI = 0;
-        let totalTeacher1 = 0;
-        let totalTeacher2 = 0;
+        const criteriaNameMapping = {
+          s1: 'ใจความสำคัญ (4 คะแนน)',
+          s2: 'การเรียงลำดับและเชื่อมโยงความคิด (2 คะแนน)',
+          s3: 'ความถูกต้องตามหลักการเขียนย่อความ (1 คะแนน)',
+          s4: 'การสะกดคำ (1 คะแนน)',
+          s5: 'การใช้คำ/ถ้อยคำสำนวน (1 คะแนน)',
+          s6: 'การใช้ประโยค (1 คะแนน)',
+          s7: 'คำบอกข้อคิดเห็น (2 คะแนน)',
+          s8: 'เหตุผลสนับสนุน (5 คะแนน)',
+          s9: 'การเรียงลำดับและเชื่อมโยงความคิด (1 คะแนน)',
+          s10: 'ความถูกต้องตามหลักการแสดงความคิดเห็น (1 คะแนน)',
+          s11: 'การสะกดคำ/การใช้ภาษา (1 คะแนน)',
+          s12: 'การใช้คำ/ถ้อยคำสำนวน (1 คะแนน)',
+          s13: 'การใช้ประโยค (1 คะแนน)',
+        };
 
-        criteriaOrder.forEach(key => {
-          if (description[key] !== undefined) {
-            const item = description[key];
-            let aiScore = "-";
-            let details = "";
+        let totals = {
+          ai: { part1: 0, part2: 0 },
+          teacher1: { part1: 0, part2: 0 },
+          teacher2: { part1: 0, part2: 0 }
+        };
 
-            // ========== ดึงคะแนน AI ==========
-            if (typeof item === 'number') {
-              aiScore = item;
-              if (key.includes("คะแนนรวม")) {
-                totalAI += parseFloat(item) || 0;
-              }
-            } else if (item && item.score !== undefined && item.score !== null) {
-              aiScore = item.score;
-              if (!key.includes("คะแนนรวม")) {
-                totalAI += parseFloat(aiScore) || 0;
-              }
-            } else if (item && item.คะแนนรวม !== undefined && item.คะแนนรวม !== null) {
-              aiScore = item.คะแนนรวม;
-              totalAI += parseFloat(aiScore) || 0;
+        criteriaOrder.forEach(item => {
+          if (typeof item === 'object') {
+            if (item.type === 'header') {
+              const headerRow = document.createElement("tr");
+              headerRow.innerHTML = `<td colspan="5" style="background-color: #e9ecef; font-weight: bold; text-align: center;">${item.text}</td>`;
+              feedbackTable.appendChild(headerRow);
+            } else if (item.type === 'summary') {
+              const part = `part${item.part}`;
+              const summaryRow = document.createElement("tr");
+              summaryRow.style.background = "#f0f8ff";
+              summaryRow.style.fontWeight = "bold";
+              summaryRow.innerHTML = `
+                    <td>คะแนนรวมข้อที่ ${item.part}</td>
+                    <td class="score-cell score-ai">${totals.ai[part].toFixed(1)}</td>
+                    <td class="score-cell score-teacher">${totals.teacher1[part] > 0 ? totals.teacher1[part].toFixed(1) : '-'}</td>
+                    <td class="score-cell score-teacher">${totals.teacher2[part] > 0 ? totals.teacher2[part].toFixed(1) : '-'}</td>
+                    <td>-</td>
+                `;
+              feedbackTable.appendChild(summaryRow);
             }
-
-            // ========== ดึงคะแนนครู ==========
-            let teacher1 = "-";
-            let teacher2 = "-";
-
-            if (mapping[key]) {
-              const sKey = mapping[key];
-
-              if (teacherScores && typeof teacherScores === 'object') {
-                const t1 = teacherScores.teacher1?.[sKey];
-                const t2 = teacherScores.teacher2?.[sKey];
-
-                if (t1 !== null && t1 !== undefined && t1 !== "") {
-                  const t1Val = parseFloat(t1);
-                  if (!isNaN(t1Val)) {
-                    teacher1 = t1Val.toFixed(2);
-                    if (!key.includes("คะแนนรวม")) {
-                      totalTeacher1 += t1Val;
-                    }
-                  }
-                }
-
-                if (t2 !== null && t2 !== undefined && t2 !== "") {
-                  const t2Val = parseFloat(t2);
-                  if (!isNaN(t2Val)) {
-                    teacher2 = t2Val.toFixed(2);
-                    if (!key.includes("คะแนนรวม")) {
-                      totalTeacher2 += t2Val;
-                    }
-                  }
-                }
-              }
-
-              console.log(`📝 ${key} -> ${sKey}: AI=${aiScore}, T1=${teacher1}, T2=${teacher2}`);
-            }
-
-            // ========== สร้างรายละเอียด ==========
-            if (typeof item === 'object' && item !== null) {
-              details = Object.entries(item)
-                .filter(([k, v]) => k !== 'score' && k !== 'คะแนนรวม')
-                .map(([k, v]) => {
-                  if (typeof v === 'object') {
-                    return `${k}: ${JSON.stringify(v)}`;
-                  }
-                  return `${k}: ${v}`;
-                })
-                .join('\n');
-            }
-
-            // ========== สร้างแถว ==========
-            const row = document.createElement("tr");
-            const isSum = key.includes("คะแนนรวม");
-
-            row.innerHTML = `
-          <td><strong>${key}</strong></td>
-          <td class="score-cell score-ai">${aiScore}</td>
-          <td class="score-cell score-teacher">${teacher1}</td>
-          <td class="score-cell score-teacher">${teacher2}</td>
-          <td class="detail-cell">${details || '-'}</td>
-        `;
-
-            if (isSum) {
-              row.style.background = "#f0f8ff";
-              row.style.fontWeight = "bold";
-            }
-
-            // แสดงแถวแม้ว่าจะไม่มีข้อมูลบางอย่าง
-            if (aiScore === "-" && teacher1 === "-" && teacher2 === "-") {
-              console.warn(`⚠️ ไม่มีข้อมูลคะแนนสำหรับ: ${key}`);
-            }
-
-            feedbackTable.appendChild(row);
+            return;
           }
-        });
 
-        console.log("📊 สรุปคะแนนรวม:", {
-          totalAI: totalAI.toFixed(2),
-          totalTeacher1: totalTeacher1.toFixed(2),
-          totalTeacher2: totalTeacher2.toFixed(2)
+          const sKey = item;
+          const criteriaData = parsedDescription[sKey];
+
+          if (criteriaData) {
+            const criteriaName = criteriaNameMapping[sKey] || sKey;
+            const aiScore = parseFloat(criteriaData.score ?? 0);
+
+            const part = parseInt(sKey.substring(1)) <= 6 ? 'part1' : 'part2';
+            totals.ai[part] += aiScore;
+
+            const t1ScoreStr = teacherScores?.teacher1?.[sKey];
+            const t2ScoreStr = teacherScores?.teacher2?.[sKey];
+            const teacher1 = t1ScoreStr != null && t1ScoreStr !== '' ? parseFloat(t1ScoreStr).toFixed(1) : "-";
+            const teacher2 = t2ScoreStr != null && t2ScoreStr !== '' ? parseFloat(t2ScoreStr).toFixed(1) : "-";
+
+            if (teacher1 !== '-') totals.teacher1[part] += parseFloat(teacher1);
+            if (teacher2 !== '-') totals.teacher2[part] += parseFloat(teacher2);
+
+            let details = "-";
+            if (criteriaData.feedback) {
+              try {
+                const feedbackObj = JSON.parse(criteriaData.feedback);
+                details = JSON.stringify(feedbackObj, null, 2);
+              } catch (e) {
+                details = criteriaData.feedback;
+              }
+            }
+
+            const row = document.createElement("tr");
+            row.innerHTML = `
+                <td>${criteriaName}</td>
+                <td class="score-cell score-ai">${aiScore.toFixed(1)}</td>
+                <td class="score-cell score-teacher">${teacher1}</td>
+                <td class="score-cell score-teacher">${teacher2}</td>
+                <td><pre>${details}</pre></td>
+            `;
+            feedbackTable.appendChild(row);
+          } else {
+            console.warn(`⚠️ ไม่มีข้อมูลสำหรับเกณฑ์: ${sKey}`);
+          }
         });
 
       } catch (error) {
