@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+  <meta charset="UTF-8">
+  <title>ผลการตรวจคำตอบ</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      background: #f5f5f5;
+    }
+
+    .navbar {
+      position: sticky;
+      top: 0;
+      background-color: #4c65af;
+      padding: 12px 30px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      z-index: 999;
+    }
+
+    .navbar a {
+      color: #fff;
+      text-decoration: none;
+      margin-right: 20px;
+      font-weight: 500;
+      padding: 8px 15px;
+      border-radius: 5px;
+      transition: all 0.3s ease;
+    }
+
+    .navbar a:hover {
+      background-color: rgba(255, 255, 255, 0.2);
+      color: #ffeb3b;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 20px auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+    }
+
+    h2 {
+      margin-top: 0;
+    }
+
+    .filters {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    select,
+    button {
+      padding: 5px 10px;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    th,
+    td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: center;
+      vertical-align: top;
+    }
+
+    th {
+      background-color: #e0e0e0;
+    }
+
+    .score {
+      font-weight: bold;
+      color: green;
+    }
+
+    .status {
+      font-weight: bold;
+    }
+
+    .status.checked {
+      color: green;
+    }
+
+    .status.unchecked {
+      color: red;
+    }
+
+    pre {
+      background: #eee;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      text-align: left;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="navbar">
+    <div class="navbar-left">
+      <a href="homepage_user.html">HOME PAGE</a>
+      <a href="check_exam.html">ตรวจข้อสอบ</a>
+      <a href="view_scores.html">ผลคะแนน</a>
+      <a href="profile_user.html">จัดการผู้ใช้งาน</a>
+      <a href="contect_admin.html">ติดต่อแอดมิน</a>
+      <a href="login.html">ออกจากระบบ</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <h2>ผลการตรวจคำตอบนักเรียน</h2>
+
+    <div class="filters">
+      <label>ปีการศึกษา:
+        <select id="year">
+          <option value="">-- เลือกปีการศึกษา --</option>
+        </select>
+      </label>
+      <label>กลุ่มการสอบ:
+        <select id="group">
+          <option value="">-- เลือกกลุ่มการสอบ --</option>
+        </select>
+      </label>
+      <label>นักเรียน:
+        <select id="student">
+          <option value="">-- เลือกรหัสนักเรียน --</option>
+        </select>
+      </label>
+      <button onclick="loadStudentData()">ดูผล</button>
+    </div>
+
+    <p><strong>รหัสนักเรียน:</strong> <span id="studentId"></span></p>
+    <p><strong>ชั้นเรียน:</strong> <span id="groupId"></span></p>
+    <p><strong>ปีการศึกษา:</strong> <span id="examYear"></span></p>
+    <p><strong>สถานะ:</strong> <span id="status" class="status"></span></p>
+    <p><strong>คะแนนรวม:</strong> <span id="score" class="score"></span></p>
+
+    <h3>คำตอบนักเรียน</h3>
+    <p><strong>ข้อ 1:</strong></p>
+    <pre id="essayText"></pre>
+    <p><strong>ข้อ 2:</strong></p>
+    <pre id="essayAnalysis"></pre>
+
+    <h3>รายละเอียดการตรวจ (AI Feedback)</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>ข้อ</th>
+          <th>คะแนน</th>
+          <th>คะแนนครู 1</th>
+          <th>คะแนนครู 2</th>
+          <th>รายละเอียดคะแนน</th>
+        </tr>
+      </thead>
+      <tbody id="feedbackTable"></tbody>
+    </table>
+  </div>
+
+  <script>
+    let allData = [];
+
+    // โหลด filters ตอนเปิดหน้า
+    document.addEventListener("DOMContentLoaded", async () => {
+      try {
+        const res = await fetch("http://127.0.0.1:8000/api/answers-all");
+        if (!res.ok) throw new Error("โหลดข้อมูลไม่สำเร็จ");
+        allData = await res.json();
+
+        const years = [...new Set(allData.map(item => item.exam_year))];
+        const yearSelect = document.getElementById("year");
+        years.forEach(y => {
+          const opt = document.createElement("option");
+          opt.value = y;
+          opt.textContent = y;
+          yearSelect.appendChild(opt);
+        });
+
+        yearSelect.addEventListener("change", () => {
+          const groups = [...new Set(allData.filter(d => d.exam_year == yearSelect.value).map(d => d.group_id))];
+          const groupSelect = document.getElementById("group");
+          groupSelect.innerHTML = '<option value="">-- เลือกกลุ่มการสอบ --</option>';
+          groups.forEach(g => {
+            const opt = document.createElement("option");
+            opt.value = g;
+            opt.textContent = g;
+            groupSelect.appendChild(opt);
+          });
+        });
+
+        document.getElementById("group").addEventListener("change", () => {
+          const group = document.getElementById("group").value;
+          const students = allData.filter(d => d.exam_year == yearSelect.value && d.group_id == group);
+          const studentSelect = document.getElementById("student");
+          studentSelect.innerHTML = '<option value="">-- เลือกรหัสนักเรียน --</option>';
+          students.forEach(s => {
+            const opt = document.createElement("option");
+            opt.value = s.answer_id;
+            opt.textContent = s.student_id;
+            studentSelect.appendChild(opt);
+          });
+        });
+
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+
+    // โหลดข้อมูลนักเรียน
+    async function loadStudentData() {
+      const answerId = document.getElementById("student").value;
+      if (!answerId) {
+        alert("กรุณาเลือกนักเรียน");
+        return;
+      }
+
+      try {
+        const res = await fetch(`http://127.0.0.1:8000/api/view-score/${answerId}`);
+        if (!res.ok) throw new Error("ไม่สามารถโหลดข้อมูลได้");
+        const data = await res.json();
+
+        // --- แสดงข้อมูลทั่วไป ---
+        document.getElementById("studentId").textContent = data.student_id;
+        document.getElementById("groupId").textContent = data.group_id;
+        document.getElementById("examYear").textContent = data.exam_year;
+        document.getElementById("status").textContent = data.status;
+        document.getElementById("status").className = "status " + (data.status === 'ตรวจแล้ว' ? 'checked' : 'unchecked');
+        document.getElementById("essayText").textContent = data.essay_text || "";
+        document.getElementById("essayAnalysis").textContent = data.essay_analysis || "";
+
+        // ========== แปลงข้อมูล JSON ==========
+        let parsedDescription = {};
+        try {
+          if (data.description) {
+            parsedDescription = typeof data.description === 'string' ? JSON.parse(data.description) : data.description;
+          }
+          console.log("✅ Parsed description:", parsedDescription);
+        } catch (e) {
+          console.error("❌ Error parsing description:", e);
+        }
+
+        // 🔥 แก้ไขคะแนนที่ผิดพลาด (ดึงจาก feedback)
+        Object.keys(parsedDescription).forEach(key => {
+          const item = parsedDescription[key];
+
+          if (item.score === 0 && item.feedback) {
+            try {
+              const feedbackObj = typeof item.feedback === 'string' ? JSON.parse(item.feedback) : item.feedback;
+
+              if (key === 's1' && feedbackObj['คะแนนรวม'] != null) {
+                item.score = parseFloat(feedbackObj['คะแนนรวม']);
+                console.log(`🔧 แก้ไข ${key}: 0 → ${item.score}`);
+              }
+
+              if (key === 's8' && feedbackObj.score_total != null) {
+                item.score = parseFloat(feedbackObj.score_total);
+                console.log(`🔧 แก้ไข ${key}: 0 → ${item.score}`);
+              }
+
+              if ((key === 's3' || key === 's10') && feedbackObj.score != null && item.score === 0) {
+                item.score = parseFloat(feedbackObj.score);
+                console.log(`🔧 แก้ไข ${key}: 0 → ${item.score}`);
+              }
+
+            } catch (e) {
+              console.warn(`⚠️ ไม่สามารถ parse feedback ของ ${key}:`, e);
+            }
+          }
+        });
+
+        let teacherScores = {};
+        try {
+          if (data.teacher_scores) {
+            teacherScores = typeof data.teacher_scores === 'string' ? JSON.parse(data.teacher_scores) : data.teacher_scores;
+          }
+          console.log("✅ Parsed teacherScores:", teacherScores);
+        } catch (e) {
+          console.error("❌ Error parsing teacher_scores:", e);
+        }
+
+        // 🔥 คำนวณคะแนนรวม AI
+        let totalAIScore = 0;
+        Object.keys(parsedDescription).forEach(key => {
+          if (key.startsWith('s') && parsedDescription[key]?.score != null) {
+            totalAIScore += parseFloat(parsedDescription[key].score);
+          }
+        });
+
+        console.log("📊 คะแนนรวม AI:", totalAIScore);
+        document.getElementById("score").textContent = totalAIScore.toFixed(1);
+
+        // ========== สร้างตาราง ==========
+        const feedbackTable = document.getElementById("feedbackTable");
+        feedbackTable.innerHTML = "";
+
+        const criteriaOrder = [
+          { type: 'header', text: '--- ข้อที่ 1: การเขียนย่อความ (10 คะแนน) ---' },
+          "s1", "s2", "s3", "s4", "s5", "s6",
+          { type: 'summary', part: 1 },
+          { type: 'header', text: '--- ข้อที่ 2: การแสดงความคิดเห็น (20 คะแนน) ---' },
+          "s7", "s8", "s9", "s10", "s11", "s12", "s13",
+          { type: 'summary', part: 2 },
+          { type: 'grand_total' }  // 🔥 เพิ่มคะแนนรวมทั้งหมด
+        ];
+
+        const criteriaNameMapping = {
+          s1: 'ใจความสำคัญ (4 คะแนน)',
+          s2: 'การเรียงลำดับและเชื่อมโยงความคิด (2 คะแนน)',
+          s3: 'ความถูกต้องตามหลักการเขียนย่อความ (1 คะแนน)',
+          s4: 'การสะกดคำ (1 คะแนน)',
+          s5: 'การใช้คำ/ถ้อยคำสำนวน (1 คะแนน)',
+          s6: 'การใช้ประโยค (1 คะแนน)',
+          s7: 'คำบอกข้อคิดเห็น (2 คะแนน)',
+          s8: 'เหตุผลสนับสนุน (5 คะแนน)',
+          s9: 'การเรียงลำดับและเชื่อมโยงความคิด (1 คะแนน)',
+          s10: 'ความถูกต้องตามหลักการแสดงความคิดเห็น (1 คะแนน)',
+          s11: 'การสะกดคำ/การใช้ภาษา (1 คะแนน)',
+          s12: 'การใช้คำ/ถ้อยคำสำนวน (1 คะแนน)',
+          s13: 'การใช้ประโยค (1 คะแนน)',
+        };
+
+        let totals = {
+          ai: { part1: 0, part2: 0 },
+          teacher1: { part1: 0, part2: 0 },
+          teacher2: { part1: 0, part2: 0 }
+        };
+
+        criteriaOrder.forEach(item => {
+          if (typeof item === 'object') {
+            if (item.type === 'header') {
+              const headerRow = document.createElement("tr");
+              headerRow.innerHTML = `<td colspan="5" style="background-color: #e9ecef; font-weight: bold; text-align: center;">${item.text}</td>`;
+              feedbackTable.appendChild(headerRow);
+            }
+            else if (item.type === 'summary') {
+              const part = `part${item.part}`;
+              const summaryRow = document.createElement("tr");
+              summaryRow.style.background = "#f0f8ff";
+              summaryRow.style.fontWeight = "bold";
+              summaryRow.innerHTML = `
+            <td>คะแนนรวมข้อที่ ${item.part}</td>
+            <td class="score-cell score-ai">${totals.ai[part].toFixed(1)}</td>
+            <td class="score-cell score-teacher">${totals.teacher1[part] > 0 ? totals.teacher1[part].toFixed(1) : '-'}</td>
+            <td class="score-cell score-teacher">${totals.teacher2[part] > 0 ? totals.teacher2[part].toFixed(1) : '-'}</td>
+            <td>-</td>
+          `;
+              feedbackTable.appendChild(summaryRow);
+            }
+            // 🔥 เพิ่มคะแนนรวมทั้งหมด
+            else if (item.type === 'grand_total') {
+              const grandTotalRow = document.createElement("tr");
+              grandTotalRow.style.background = "#d4edda";
+              grandTotalRow.style.fontWeight = "bold";
+              grandTotalRow.style.fontSize = "16px";
+
+              const totalAI = totals.ai.part1 + totals.ai.part2;
+              const totalT1 = totals.teacher1.part1 + totals.teacher1.part2;
+              const totalT2 = totals.teacher2.part1 + totals.teacher2.part2;
+
+              grandTotalRow.innerHTML = `
+            <td style="text-align: center; background-color: #28a745; color: white;">🏆 คะแนนรวมทั้งหมด (30 คะแนน)</td>
+            <td class="score-cell" style="background-color: #d1ecf1; color: #004085; font-size: 18px;">${totalAI.toFixed(1)}</td>
+            <td class="score-cell" style="background-color: #d4edda; color: #155724; font-size: 18px;">${totalT1 > 0 ? totalT1.toFixed(1) : '-'}</td>
+            <td class="score-cell" style="background-color: #d4edda; color: #155724; font-size: 18px;">${totalT2 > 0 ? totalT2.toFixed(1) : '-'}</td>
+            <td style="background-color: #d4edda;">-</td>
+          `;
+              feedbackTable.appendChild(grandTotalRow);
+            }
+            return;
+          }
+
+          const sKey = item;
+          const criteriaData = parsedDescription[sKey];
+
+          if (criteriaData) {
+            const criteriaName = criteriaNameMapping[sKey] || sKey;
+            const aiScore = parseFloat(criteriaData.score ?? 0);
+
+            const part = parseInt(sKey.substring(1)) <= 6 ? 'part1' : 'part2';
+            totals.ai[part] += aiScore;
+
+            const t1ScoreStr = teacherScores?.teacher1?.[sKey];
+            const t2ScoreStr = teacherScores?.teacher2?.[sKey];
+            const teacher1 = t1ScoreStr != null && t1ScoreStr !== '' ? parseFloat(t1ScoreStr).toFixed(1) : "-";
+            const teacher2 = t2ScoreStr != null && t2ScoreStr !== '' ? parseFloat(t2ScoreStr).toFixed(1) : "-";
+
+            if (teacher1 !== '-') totals.teacher1[part] += parseFloat(teacher1);
+            if (teacher2 !== '-') totals.teacher2[part] += parseFloat(teacher2);
+
+            let details = "-";
+            if (criteriaData.feedback) {
+              try {
+                const feedbackObj = JSON.parse(criteriaData.feedback);
+                details = JSON.stringify(feedbackObj, null, 2);
+              } catch (e) {
+                details = criteriaData.feedback;
+              }
+            }
+
+            const row = document.createElement("tr");
+            row.innerHTML = `
+          <td>${criteriaName}</td>
+          <td class="score-cell score-ai">${aiScore.toFixed(1)}</td>
+          <td class="score-cell score-teacher">${teacher1}</td>
+          <td class="score-cell score-teacher">${teacher2}</td>
+          <td><pre>${details}</pre></td>
+        `;
+            feedbackTable.appendChild(row);
+          }
+        });
+
+      } catch (error) {
+        console.error("❌ เกิดข้อผิดพลาด:", error);
+        alert("เกิดข้อผิดพลาด: " + error.message);
+      }
+    }
+  </script>
+</body>
+
+</html>
