@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>เพิ่มคำตอบนักเรียน</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Sarabun', Arial, sans-serif;
+      margin: 0;
+      display: flex;
+      background: #f5f7fa;
+    }
+
+    nav.sidebar {
+      width: 220px;
+      background: #333;
+      color: #fff;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    nav.sidebar h2 {
+      font-size: 20px;
+      margin-bottom: 20px;
+    }
+
+    nav.sidebar a {
+      display: block;
+      color: #fff;
+      text-decoration: none;
+      margin-bottom: 10px;
+      padding: 10px;
+      background: #444;
+      border-radius: 5px;
+    }
+
+    nav.sidebar a:hover {
+      background: #555;
+    }
+
+    main.content {
+      flex: 1;
+      display: flex;
+      padding: 20px;
+      gap: 20px;
+      overflow-x: auto;
+    }
+
+    .form-container,
+    .table-container {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      flex: 1;
+      min-width: 300px;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+
+    input,
+    textarea,
+    select {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      box-sizing: border-box;
+    }
+
+    button {
+      margin-top: 20px;
+      width: 100%;
+      background-color: #3b5bdb;
+      color: white;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: opacity 0.3s;
+    }
+
+    button:hover {
+      opacity: 0.8;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      background: white;
+    }
+
+    th,
+    td {
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+      text-align: left;
+    }
+
+    th {
+      background: #3b5bdb;
+      color: white;
+    }
+
+    @media (max-width: 1000px) {
+      main.content {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <nav class="sidebar">
+    <h2>เมนู</h2>
+    <a href="homepage_admin.html">HOME PAGE</a>
+    <a href="manage_user.html">จัดการผู้ใช้งาน</a>
+    <a href="create_answer.html">เพิ่มคำตอบนักเรียน</a>
+    <a href="show_answer.html">ตรวจสอบคำตอบนักเรียน</a>
+    <a href="view_feedback.html">ตรวจสอบความคิดเห็นของผู้ใช้งาน</a>
+    <a href="settings.html">ตั้งค่าระบบ</a>
+    <a href="login.html">ออกจากระบบ</a>
+  </nav>
+
+  <main class="content">
+    <!-- ฟอร์มเพิ่มคำตอบ -->
+    <div class="form-container">
+      <h1>อัปโหลดคำตอบนักเรียน (Excel/CSV)</h1>
+      <form id="uploadForm" enctype="multipart/form-data">
+        <label>เลือกไฟล์คำตอบ</label>
+        <input type="file" id="fileInput" name="file" accept=".csv,.xlsx" required>
+
+        <button type="submit">อัปโหลดไฟล์</button>
+      </form>
+      <p id="message" style="margin-top:10px;"></p>
+    </div>
+
+    <script>
+      const API_BASE = 'http://127.0.0.1:8000';
+      const uploadForm = document.getElementById('uploadForm');
+      const message = document.getElementById('message');
+
+      uploadForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        message.textContent = '';
+
+        const fileInput = document.getElementById('fileInput');
+        if (!fileInput.files.length) {
+          message.style.color = 'red';
+          message.textContent = 'กรุณาเลือกไฟล์ก่อน';
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", fileInput.files[0]);
+
+        try {
+          const res = await fetch(`${API_BASE}/api/answers/upload`, {
+            method: 'POST',
+            body: formData
+          });
+
+          const result = await res.json();
+          if (!res.ok) throw new Error(result.detail || `Error ${res.status}`);
+
+          message.style.color = 'green';
+          message.textContent = `อัปโหลดสำเร็จ: ${result.inserted} รายการ`;
+        } catch (err) {
+          console.error('upload error:', err);
+          message.style.color = 'red';
+          message.textContent = 'เกิดข้อผิดพลาด: ' + (err.message || err);
+        }
+      });
+    </script>
+
+</body>
+
+</html>
