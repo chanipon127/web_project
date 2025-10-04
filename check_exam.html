@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+  <meta charset="UTF-8">
+  <title>ระบบตรวจข้อสอบ</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      background-color: #f5f5f5;
+    }
+
+    .navbar {
+      position: sticky;
+      top: 0;
+      background-color: #4c65af;
+      padding: 12px 30px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      z-index: 999;
+    }
+
+    .navbar a {
+      color: #fff;
+      text-decoration: none;
+      margin-right: 20px;
+      font-weight: 500;
+      padding: 8px 15px;
+      border-radius: 5px;
+      transition: all 0.3s ease;
+    }
+
+    .navbar a:hover {
+      background-color: rgba(255, 255, 255, 0.2);
+      color: #ffeb3b;
+    }
+
+    .navbar-left {
+      display: flex;
+      gap: 15px;
+    }
+
+    .navbar-left::-webkit-scrollbar {
+      display: none;
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .user-info img {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+    }
+
+    .container {
+      padding: 20px;
+    }
+
+    .filters {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    select,
+    button {
+      padding: 5px 10px;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      background-color: white;
+    }
+
+    th,
+    td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: center;
+    }
+
+    th {
+      background-color: #e0e0e0;
+    }
+
+    .status-checked {
+      color: green;
+      font-weight: bold;
+    }
+
+    .status-unchecked {
+      color: red;
+      font-weight: bold;
+    }
+
+    h2 {
+      margin-top: 0;
+    }
+
+    #pagination {
+      margin-top: 15px;
+      text-align: center;
+    }
+
+    #pagination button,
+    #pagination select {
+      margin: 0 5px;
+      padding: 6px 12px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Navbar -->
+  <div class="navbar">
+    <div class="navbar-left">
+      <a href="homepage_user.html">HOME PAGE</a>
+      <a href="check_exam.html">ตรวจข้อสอบ</a>
+      <a href="view_scores.html">ผลคะแนน</a>
+      <a href="profile_user.html">จัดการผู้ใช้งาน</a>
+      <a href="contact_admin.html">ติดต่อแอดมิน</a>
+      <a href="login.html">ออกจากระบบ</a>
+    </div>
+  </div>
+
+  <!-- Main Container -->
+  <div class="container">
+    <h2>รายชื่อนักเรียน</h2>
+
+    <div class="filters">
+      <label>ปีการศึกษา: <span id="yearDisplay"></span></label>
+      <label style="margin-left:20px;">ระดับชั้นเรียน: <span id="gradeDisplay"></span></label>
+      <label style="margin-left:20px;">สถานะ:
+        <select id="status">
+          <option value="">-- ทุกสถานะ --</option>
+          <option value="ตรวจแล้ว">ตรวจแล้ว</option>
+          <option value="ยังไม่ได้ตรวจ">ยังไม่ได้ตรวจ</option>
+        </select>
+      </label>
+      <button onclick="loadData()">โหลดข้อมูล</button>
+    </div>
+
+
+    <table>
+      <thead>
+        <tr>
+          <th>รหัสนักเรียน</th>
+          <th>ระดับชั้นเรียน</th>
+          <th>ปีการศึกษา</th>
+          <th>สถานะ</th>
+          <th>ผลคะแนน</th>
+        </tr>
+      </thead>
+      <tbody id="studentTableBody"></tbody>
+    </table>
+
+    <!-- ✅ Pagination -->
+    <div id="pagination"></div>
+  </div>
+
+  <script>
+    let allData = [];
+    let currentPage = 1;
+    const itemsPerPage = 50;
+
+    // โหลดตัวเลือกปี/กลุ่ม
+    async function loadFilters() {
+      try {
+        const res = await fetch("http://127.0.0.1:8000/api/answers-all");
+        if (!res.ok) throw new Error("โหลดข้อมูลไม่สำเร็จ");
+        allData = await res.json();
+
+        sessionStorage.setItem("allData", JSON.stringify(allData));
+        populateFilters();
+        restoreSelectionsAndTable();
+      } catch (err) {
+        alert("โหลดตัวเลือกปี/ระดับชั้นเรียนไม่สำเร็จ: " + err.message);
+      }
+    }
+
+    function populateFilters() {
+      const years = [...new Set(allData.map(item => item.exam_year))];
+      const yearSelect = document.getElementById("year");
+      yearSelect.innerHTML = '<option value="">-- เลือกปีการศึกษา --</option>';
+      years.forEach(y => {
+        const option = document.createElement("option");
+        option.value = y;
+        option.textContent = y;
+        yearSelect.appendChild(option);
+      });
+
+      const groups = [...new Set(allData.map(item => item.group_id))];
+      const groupSelect = document.getElementById("group");
+      groupSelect.innerHTML = '<option value="">-- เลือกระดับชั้นเรียน --</option>';
+      groups.forEach(g => {
+        const option = document.createElement("option");
+        option.value = g;
+        option.textContent = g;
+        groupSelect.appendChild(option);
+      });
+    }
+
+
+    function loadData() {
+      const year = document.getElementById("year").value;
+      const group = document.getElementById("group").value;
+      const status = document.getElementById("status").value;
+
+
+      let data = [...allData];
+      if (year) data = data.filter(item => String(item.exam_year) === year);
+      if (group) data = data.filter(item => String(item.group_id) === grade);
+      if (status) {
+        if (status === "ตรวจแล้ว")
+          data = data.filter(item => item.status === "ตรวจแล้ว");
+        else if (status === "ยังไม่ได้ตรวจ")
+          data = data.filter(item => item.status !== "ตรวจแล้ว");
+      }
+
+      renderTable(data);
+    }
+
+
+    function renderTable(data) {
+      const tbody = document.getElementById("studentTableBody");
+      tbody.innerHTML = "";
+
+      if (data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5">ไม่พบข้อมูล</td></tr>`;
+        document.getElementById("pagination").innerHTML = "";
+        return;
+      }
+
+      const start = (currentPage - 1) * itemsPerPage;
+      const end = start + itemsPerPage;
+      const pageData = data.slice(start, end);
+
+      pageData.forEach(ans => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${ans.student_id}</td>
+          <td>${ans.group_id}</td>
+          <td>${ans.exam_year}</td>
+          <td class="status-col ${ans.status === "ตรวจแล้ว" ? "status-checked" : "status-unchecked"}">
+            ${ans.status}
+          </td>
+          <td>
+            ${ans.status === "ตรวจแล้ว"
+            ? `<button onclick="viewScore(${ans.answer_id})">ดูผล</button>`
+            : `<button onclick="startCheck(${ans.answer_id}, this)">ตรวจ</button>`}
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+
+      renderPagination(data.length);
+    }
+
+    function renderPagination(totalItems) {
+      const totalPages = Math.ceil(totalItems / itemsPerPage);
+      const pagination = document.getElementById("pagination");
+      pagination.innerHTML = "";
+
+      if (totalPages <= 1) return;
+
+      const prevBtn = document.createElement("button");
+      prevBtn.textContent = "ก่อนหน้า";
+      prevBtn.disabled = currentPage === 1;
+      prevBtn.onclick = () => {
+        currentPage--;
+        loadData();
+      };
+      pagination.appendChild(prevBtn);
+
+      const select = document.createElement("select");
+      select.style.margin = "0 10px";
+      for (let i = 1; i <= totalPages; i++) {
+        const option = document.createElement("option");
+        option.value = i;
+        option.textContent = `หน้า ${i}`;
+        if (i === currentPage) option.selected = true;
+        select.appendChild(option);
+      }
+      select.onchange = e => {
+        currentPage = parseInt(e.target.value);
+        loadData();
+      };
+      pagination.appendChild(select);
+
+      const nextBtn = document.createElement("button");
+      nextBtn.textContent = "ถัดไป";
+      nextBtn.disabled = currentPage === totalPages;
+      nextBtn.onclick = () => {
+        currentPage++;
+        loadData();
+      };
+      pagination.appendChild(nextBtn);
+    }
+
+    async function startCheck(answerId, btn) {
+      btn.disabled = true;
+      btn.innerText = "กำลังตรวจ...";
+      try {
+        const res = await fetch(`http://127.0.0.1:8000/api/check-answer/${answerId}`, { method: "POST" });
+        const result = await res.json();
+
+        if (res.ok) {
+          const statusTd = btn.closest("tr").querySelector(".status-col");
+          statusTd.classList.remove("status-unchecked");
+          statusTd.classList.add("status-checked");
+          statusTd.innerHTML = `<span style="color: green; font-weight:bold;">ตรวจแล้ว</span>`;
+
+          const actionTd = btn.parentElement;
+          actionTd.innerHTML = "";
+          const viewBtn = document.createElement("button");
+          viewBtn.textContent = "ดูผล";
+          viewBtn.addEventListener("click", () => viewScore(answerId));
+          actionTd.appendChild(viewBtn);
+
+          const updated = allData.find(item => item.answer_id === answerId);
+          if (updated) updated.status = "ตรวจแล้ว";
+          sessionStorage.setItem("allData", JSON.stringify(allData));
+
+          viewScore(answerId);
+        } else {
+          alert(result.detail || "ตรวจไม่สำเร็จ");
+          btn.disabled = false;
+          btn.innerText = "ตรวจ";
+        }
+      } catch (err) {
+        alert("เกิดข้อผิดพลาด: " + err.message);
+        btn.disabled = false;
+        btn.innerText = "ตรวจ";
+      }
+    }
+
+    function viewScore(answerId) {
+      window.location.href = `view_score.html?answer_id=${answerId}`;
+    }
+
+    function restoreSelectionsAndTable() {
+      const savedYear = sessionStorage.getItem("selectedYear");
+      const savedGroup = sessionStorage.getItem("selectedGroup");
+      const savedStatus = sessionStorage.getItem("selectedStatus");
+      if (savedStatus) document.getElementById("status").value = savedStatus;
+
+      if (savedYear) document.getElementById("year").value = savedYear;
+      if (savedGroup) document.getElementById("group").value = savedGroup;
+      if (savedYear || savedGroup) loadData();
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const saved = sessionStorage.getItem("allData");
+      if (saved) {
+        allData = JSON.parse(saved);
+        populateFilters();
+        restoreSelectionsAndTable();
+      } else {
+        loadFilters();
+      }
+      // ✅ แสดงค่าปีและชั้นเรียนจาก localStorage
+      document.getElementById("yearDisplay").textContent = localStorage.getItem("exam_year") || "-";
+      document.getElementById("gradeDisplay").textContent = localStorage.getItem("exam_grade") || "-";
+    });
+  </script>
+</body>
+
+</html>
