@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <title>ผลการตรวจคำตอบ</title>
-  <style>
+    <style>
     body {
       font-family: sans-serif;
       margin: 0;
@@ -21,6 +21,11 @@
       align-items: center;
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
       z-index: 999;
+    }
+
+    .navbar-left {
+      display: flex;
+      gap: 15px;
     }
 
     .navbar a {
@@ -48,6 +53,11 @@
 
     h2 {
       margin-top: 0;
+    }
+
+    .readonly-info {
+      margin-bottom: 15px;
+      font-size: 16px;
     }
 
     .filters {
@@ -125,17 +135,21 @@
   <div class="container">
     <h2>ผลการตรวจคำตอบนักเรียน</h2>
 
+    <!-- แสดงปีการศึกษาและชั้นเรียนแบบฟิก -->
+    <div class="readonly-info">
+      📘 <strong>ปีการศึกษา:</strong> <span id="displayYear"></span> |
+      🏫 <strong>ระดับชั้น:</strong> <span id="displayGroup"></span>
+    </div>
+
     <div class="filters">
-      <label>ปีการศึกษา:
-        <select id="year">
-          <option value="">-- เลือกปีการศึกษา --</option>
+      <label>สถานะ:
+        <select id="statusFilter">
+          <option value="">-- เลือกสถานะ --</option>
+          <option value="ตรวจแล้ว">ตรวจแล้ว</option>
+          <option value="ยังไม่ได้ตรวจ">ยังไม่ได้ตรวจ</option>
         </select>
       </label>
-      <label>กลุ่มการสอบ:
-        <select id="group">
-          <option value="">-- เลือกกลุ่มการสอบ --</option>
-        </select>
-      </label>
+   
       <label>นักเรียน:
         <select id="student">
           <option value="">-- เลือกรหัสนักเรียน --</option>
@@ -145,8 +159,6 @@
     </div>
 
     <p><strong>รหัสนักเรียน:</strong> <span id="studentId"></span></p>
-    <p><strong>ชั้นเรียน:</strong> <span id="groupId"></span></p>
-    <p><strong>ปีการศึกษา:</strong> <span id="examYear"></span></p>
     <p><strong>สถานะ:</strong> <span id="status" class="status"></span></p>
     <p><strong>คะแนนรวม:</strong> <span id="score" class="score"></span></p>
 
@@ -172,53 +184,48 @@
   </div>
 
   <script>
+    let examYear = localStorage.getItem("exam_year");
+    let examGrade = localStorage.getItem("exam_grade");
+
+    // แสดงค่าให้ผู้ใช้เห็น
+    document.getElementById("displayYear").textContent = examYear || "-";
+    document.getElementById("displayGroup").textContent = examGrade || "-";
+
     let allData = [];
 
     // โหลด filters ตอนเปิดหน้า
     document.addEventListener("DOMContentLoaded", async () => {
+      if (!examYear || !examGrade) {
+        alert("⚠️ ยังไม่ได้ตั้งค่าปีการศึกษาและระดับชั้น กรุณากลับไปที่หน้าตั้งค่าข้อสอบ");
+        window.location.href = "exam_setup.html";
+        return;
+      }
+
       try {
         const res = await fetch("http://127.0.0.1:8000/api/answers-all");
         if (!res.ok) throw new Error("โหลดข้อมูลไม่สำเร็จ");
         allData = await res.json();
 
-        const years = [...new Set(allData.map(item => item.exam_year))];
-        const yearSelect = document.getElementById("year");
-        years.forEach(y => {
+        // ฟิกกรองตามปีการศึกษาและชั้นเรียน
+        allData = allData.filter(d => d.exam_year == examYear && d.group_id == examGrade);
+
+        const statusSelect = document.getElementById("statusFilter");
+        const studentSelect = document.getElementById("student");
+
+        // โหลด dropdown นักเรียน
+        studentSelect.innerHTML = '<option value="">-- เลือกรหัสนักเรียน --</option>';
+        allData.forEach(s => {
           const opt = document.createElement("option");
-          opt.value = y;
-          opt.textContent = y;
-          yearSelect.appendChild(opt);
-        });
-
-        yearSelect.addEventListener("change", () => {
-          const groups = [...new Set(allData.filter(d => d.exam_year == yearSelect.value).map(d => d.group_id))];
-          const groupSelect = document.getElementById("group");
-          groupSelect.innerHTML = '<option value="">-- เลือกกลุ่มการสอบ --</option>';
-          groups.forEach(g => {
-            const opt = document.createElement("option");
-            opt.value = g;
-            opt.textContent = g;
-            groupSelect.appendChild(opt);
-          });
-        });
-
-        document.getElementById("group").addEventListener("change", () => {
-          const group = document.getElementById("group").value;
-          const students = allData.filter(d => d.exam_year == yearSelect.value && d.group_id == group);
-          const studentSelect = document.getElementById("student");
-          studentSelect.innerHTML = '<option value="">-- เลือกรหัสนักเรียน --</option>';
-          students.forEach(s => {
-            const opt = document.createElement("option");
-            opt.value = s.answer_id;
-            opt.textContent = s.student_id;
-            studentSelect.appendChild(opt);
-          });
+          opt.value = s.answer_id;
+          opt.textContent = s.student_id;
+          studentSelect.appendChild(opt);
         });
 
       } catch (err) {
         alert(err.message);
       }
     });
+
 
     // โหลดข้อมูลนักเรียน
     async function loadStudentData() {
@@ -324,13 +331,13 @@
           s4: 'การสะกดคำ (1 คะแนน)',
           s5: 'การใช้คำ/ถ้อยคำสำนวน (1 คะแนน)',
           s6: 'การใช้ประโยค (1 คะแนน)',
-          s7: 'คำบอกข้อคิดเห็น (2 คะแนน)',
-          s8: 'เหตุผลสนับสนุน (5 คะแนน)',
-          s9: 'การเรียงลำดับและเชื่อมโยงความคิด (1 คะแนน)',
-          s10: 'ความถูกต้องตามหลักการแสดงความคิดเห็น (1 คะแนน)',
-          s11: 'การสะกดคำ/การใช้ภาษา (1 คะแนน)',
-          s12: 'การใช้คำ/ถ้อยคำสำนวน (1 คะแนน)',
-          s13: 'การใช้ประโยค (1 คะแนน)',
+          s7: 'คำบอกข้อคิดเห็น (1 คะแนน)',
+          s8: 'เหตุผลสนับสนุน (8 คะแนน)',
+          s9: 'การเรียงลำดับและเชื่อมโยงความคิด (3 คะแนน)',
+          s10: 'ความถูกต้องตามหลักการแสดงความคิดเห็น (2 คะแนน)',
+          s11: 'การสะกดคำ/การใช้ภาษา (2 คะแนน)',
+          s12: 'การใช้คำ/ถ้อยคำสำนวน (2 คะแนน)',
+          s13: 'การใช้ประโยค (2 คะแนน)',
         };
 
         let totals = {
@@ -432,3 +439,5 @@
 </body>
 
 </html>
+
+
