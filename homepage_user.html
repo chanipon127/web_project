@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <title>หน้าหลัก - ระบบตรวจข้อสอบ AI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Prompt', sans-serif;
+            margin: 0;
+            background: #eef2f7;
+            color: #333;
+        }
+
+        .navbar {
+            background-color: #4c65af;
+            padding: 15px 30px;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .navbar img {
+            height: 50px;
+        }
+
+        .navbar a {
+            color: white;
+            text-decoration: none;
+            font-weight: bold;
+            padding: 8px 16px;
+            background: #5c7cfa;
+            border-radius: 6px;
+            transition: background 0.3s ease;
+        }
+
+        .navbar a:hover {
+            background: #748ffc;
+        }
+
+        .content {
+            padding: 60px 20px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #2a2a2a;
+            margin-bottom: 50px;
+            font-size: 2rem;
+        }
+
+        .image-container {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 30px;
+        }
+
+        .image-item {
+            background: white;
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            width: 220px;
+        }
+
+        .image-item:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .image-item img {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-bottom: 20px;
+            transition: transform 0.3s ease;
+        }
+
+        .image-item div {
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: #444;
+        }
+
+        .logout {
+            margin-top: 50px;
+        }
+
+        .logout a {
+            text-decoration: none;
+            color: #555;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="navbar">
+        <img src="logo.png" alt="logo">
+        <div>
+            <a href="login.html">ออกจากระบบ</a>
+        </div>
+    </div>
+
+    <div class="content">
+        <h1 id="site-title">ยินดีต้อนรับสู่ระบบตรวจข้อสอบอัตนัยด้วยปัญญาประดิษฐ์</h1>
+        <h2 id="exam-info" style="margin-top:20px; color:#4c65af;"></h2>
+        <div class="image-container" id="menu-container">
+            <!-- เมนูจะแสดงโดย JS ตาม role -->
+        </div>
+        <!-- ✅ ปุ่มเปลี่ยนปีการศึกษา -->
+        <div id="change-year-container" style="margin-top:15px;"></div>
+    </div>
+
+    <script>
+        // โหลดชื่อเว็บไซต์จาก localStorage
+        const siteTitle = localStorage.getItem('site_title') || 'ระบบตรวจข้อสอบอัตนัยด้วยปัญญาประดิษฐ์';
+        document.getElementById('site-title').textContent = siteTitle;
+
+        // โหลด role จาก localStorage
+        const role = localStorage.getItem('role');
+        const menuContainer = document.getElementById('menu-container');
+
+        // ถ้าเป็น examiner ให้แสดงระดับชั้นกับปีการศึกษา
+        if (role === 'examiner') {
+            const grade = localStorage.getItem("exam_grade") || "-";
+            const year = localStorage.getItem("exam_year") || "-";
+            document.getElementById("exam-info").textContent = `📘 ระดับชั้น ${grade} | ปีการศึกษา ${year}`;
+
+            // ✅ เพิ่มปุ่มเปลี่ยนปีการศึกษา
+            const changeBtn = document.createElement("button");
+            changeBtn.textContent = "เปลี่ยนปีการศึกษา";
+            changeBtn.style.padding = "10px 16px";
+            changeBtn.style.background = "#4c65af";
+            changeBtn.style.color = "white";
+            changeBtn.style.border = "none";
+            changeBtn.style.borderRadius = "6px";
+            changeBtn.style.cursor = "pointer";
+            changeBtn.style.marginTop = "10px";
+            changeBtn.style.fontWeight = "bold";
+
+            changeBtn.onclick = function () {
+                // ล้างค่าเก่า
+                localStorage.removeItem("exam_grade");
+                localStorage.removeItem("exam_year");
+                // กลับไปหน้าตั้งค่าใหม่
+                window.location.href = "exam_setup.html";
+            };
+
+            document.getElementById("change-year-container").appendChild(changeBtn);
+        }
+
+
+        if (role === 'examiner' || role === 'teacher') {
+            const menuItems = [
+                { href: 'check_exam.html', img: 'ตรวจข้อสอบ.png', label: 'ตรวจข้อสอบ' },
+                { href: 'view_scores.html', img: 'ดูคะแนน.png', label: 'ดูคะแนน' },
+                { href: 'profile_user.html', img: 'profile.png', label: 'โปรไฟล์ของฉัน' },
+                { href: 'contect_admin.html', img: 'ติดต่อadmin.png', label: 'ติดต่อAdmin' }
+            ];
+            menuItems.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'image-item';
+                div.innerHTML = `
+            <a href="${item.href}">
+                <img src="${item.img}" alt="${item.label}">
+            </a>
+            <div>${item.label}</div>
+        `;
+                menuContainer.appendChild(div);
+            });
+        } else if (role === 'admin') {
+            const adminItems = [
+                { href: 'manage_user.html', img: 'ผู้ใช้งาน.png', label: 'จัดการผู้ใช้งาน' },
+                { href: 'create_answer.html', img: 'ocr.png', label: 'เพิ่มคำตอบนักเรียน' },
+                { href: 'show_answer.html', img: 'show_answer.jpg', label: 'ตรวจสอบคำตอบนักเรียน' },
+                { href: 'view_feedback.html', img: 'feedback.png', label: 'ตรวจสอบความคิดเห็น' },
+                { href: 'settings.html', img: 'ตั้งค่า.png', label: 'ตั้งค่าระบบ' },
+            ];
+            adminItems.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'image-item';
+                div.innerHTML = `
+            <a href="${item.href}">
+                <img src="${item.img}" alt="${item.label}">
+            </a>
+            <div>${item.label}</div>
+        `;
+                menuContainer.appendChild(div);
+            });
+        }
+    </script>
+</body>
+
+</html>
