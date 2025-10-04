@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>ตั้งค่าข้อสอบ</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family:'Sarabun', sans-serif; background:#f6f8fc; display:flex; justify-content:center; align-items:center; height:100vh; margin:0; }
+    .card { background:white; padding:30px; border-radius:16px; box-shadow:0 8px 24px rgba(0,0,0,0.12); width:400px; }
+    h2 { text-align:center; color:#4c65af; margin-bottom:20px; }
+    .form-group { margin-bottom:18px; }
+    .form-group label { display:block; margin-bottom:6px; font-weight:bold; }
+    .form-group select, .form-group input { width:100%; padding:10px; border:1px solid #ddd; border-radius:8px; font-size:14px; }
+    .form-group select:focus, .form-group input:focus { border-color:#4c65af; outline:none; }
+    button { width:100%; padding:12px; background:#4c65af; color:white; border:none; border-radius:10px; cursor:pointer; font-size:15px; font-weight:bold; }
+    button:hover { background:#3c5090; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>กำหนดรายละเอียดข้อสอบ</h2>
+    <form id="examSetupForm">
+      <div class="form-group">
+        <label for="grade">ระดับชั้น</label>
+        <select id="grade" name="grade" required>
+          <option value="">-- กรุณาเลือกระดับชั้น --</option>
+          <option value="ประถมศึกษาปีที่ 6">ประถมศึกษาปีที่ 6</option>
+          <option value="มัธยมศึกษาปีที่ 3">มัธยมศึกษาปีที่ 3</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="year">ปีการศึกษา</label>
+        <input type="text" id="year" name="year" placeholder="เช่น 2568" required>
+      </div>
+      <button type="submit">ดำเนินการต่อ</button>
+    </form>
+  </div>
+
+  <script>
+    document.getElementById("examSetupForm").addEventListener("submit", function(e){
+      e.preventDefault();
+      const grade = document.getElementById("grade").value;
+      const year = document.getElementById("year").value;
+
+      // เก็บค่าไว้ใน localStorage
+      localStorage.setItem("exam_grade", grade);
+      localStorage.setItem("exam_year", year);
+
+      // ไปหน้าหลักของ examiner ต่อ
+      window.location.href = "homepage_user.html";
+    });
+  </script>
+</body>
+</html>
