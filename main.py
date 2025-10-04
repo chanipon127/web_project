@@ -31,10 +31,10 @@ app.add_middleware(
 
 # 🌐 Database Connection
 conn = psycopg2.connect(
-    host="ep-floral-salad-a1wumcdl-pooler.ap-southeast-1.aws.neon.tech",
-    database="neodb",
-    user="neodb_owner",
-    password="npg_8TuqdaBURE5Z",
+    host="ep-cold-bonus-adrb2tv4-pooler.c-2.us-east-1.aws.neon.tech",
+    database="neondb",
+    user="neondb_owner",
+    password="npg_Hi8SPj1WXrds",
     port=5432
 )
 
@@ -244,11 +244,16 @@ def get_exam_years():
     return years
 
 
-# 🔹 ดึงกลุ่มการสอบไม่ซ้ำ
+# 🔹 ดึงระดับชั้นเรียนไม่ซ้ำ
 @app.get("/group_ids", response_model=List[str])
 def get_group_ids():
     cursor = conn.cursor()
-    cursor.execute('SELECT DISTINCT group_id FROM exam ORDER BY group_id')
+    cursor.execute("""
+        SELECT DISTINCT group_id FROM exam
+        UNION
+        SELECT DISTINCT group_id FROM answer
+        ORDER BY group_id
+    """)
     groups = [row[0] for row in cursor.fetchall()]
     return groups
 
@@ -314,6 +319,7 @@ class Answer(BaseModel):
     status: str
 
 
+
 # -----------------------
 # POST เพิ่มคำตอบ(เป็นไฟล์)
 @app.post("/api/answers/upload")
@@ -351,10 +357,18 @@ async def upload_answers(file: UploadFile = File(...)):
             student_id_val = row.get("student_id")
             if pd.isna(student_id_val) or str(student_id_val).strip() == "":
                 continue  # ข้ามแถวที่ student_id ว่าง
-            student_id_val = str(student_id_val).strip()
 
+            # ✅ แปลงให้เป็น string ไม่มี .0
+            if isinstance(student_id_val, (int, np.integer)):
+                student_id_val = str(student_id_val)
+            elif isinstance(student_id_val, float):
+                student_id_val = str(int(student_id_val))
+            else:
+                student_id_val = str(student_id_val).strip()
+
+            # ✅ แปลง exam_year ให้เป็น int
             if pd.isna(row["exam_year"]):
-                continue  # ข้ามแถวที่ exam_year ว่าง
+                continue
             exam_year_val = int(row["exam_year"])
 
             group_id_val = row["group_id"]
@@ -377,7 +391,7 @@ async def upload_answers(file: UploadFile = File(...)):
                 exam_year_val,
                 str(row["essay_text"]),
                 str(row["essay_analysis"]),
-                "pending"
+                "ยังไม่ได้ตรวจ"
             ))
 
             # --- เตรียมคะแนน ---
@@ -412,6 +426,63 @@ async def upload_answers(file: UploadFile = File(...)):
     finally:
         if cursor:
             cursor.close()
+
+
+
+# -----------------------
+# POST เพิ่มคำตอบ (แบบเดี่ยว)
+# -----------------------
+@app.post("/api/answers")
+async def create_answer(answer: Answer):
+    cursor = None
+    try:
+        cursor = conn.cursor()
+
+        # แปลง student_id เป็น string (เพราะใน DB เป็น VARCHAR)
+        student_id_val = str(answer.student_id).strip()
+
+        # ตรวจว่ามี record ซ้ำหรือยัง (student_id + exam_year + group_id)
+        cursor.execute("""
+            SELECT 1 FROM answer
+            WHERE student_id=%s AND exam_year=%s AND group_id=%s
+        """, (student_id_val, answer.exam_year, answer.group_id))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="คำตอบนี้มีอยู่แล้ว")
+
+        # insert ตาราง answer
+        cursor.execute("""
+            INSERT INTO answer (student_id, group_id, exam_year, essay_text, essay_analysis, status)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (
+            student_id_val,
+            answer.group_id,
+            answer.exam_year,
+            answer.essay_text,
+            answer.essay_analysis,
+            answer.status or "ยังไม่ได้ตรวจ"
+        ))
+
+        # insert ตาราง teacher_score (สร้างค่าว่างไว้ก่อน)
+        score_cols_t1 = [f"score_s{i}_t1" for i in range(1, 14)]
+        score_cols_t2 = [f"score_s{i}_t2" for i in range(1, 14)]
+        score_cols = score_cols_t1 + score_cols_t2
+
+        cursor.execute(f"""
+            INSERT INTO teacher_score (student_id, exam_year, group_id, {','.join(score_cols)})
+            VALUES (%s, %s, %s, {','.join(['%s']*len(score_cols))})
+        """, [student_id_val, answer.exam_year, answer.group_id] + [None]*len(score_cols))
+
+        conn.commit()
+        return {"message": "เพิ่มคำตอบสำเร็จ", "student_id": student_id_val}
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+
 
 
 # GET ดึงคำตอบทั้งหมด
@@ -632,5 +703,3 @@ def view_score(answer_id: int):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
