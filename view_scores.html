@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <title>ผลการตรวจคำตอบ</title>
-    <style>
+  <style>
     body {
       font-family: sans-serif;
       margin: 0;
@@ -44,10 +44,10 @@
     }
 
     .container {
-      max-width: 1000px;
-      margin: 20px auto;
+      max-width: 1400px;
+      margin: 30px auto;
       background: white;
-      padding: 20px;
+      padding: 30px;
       border-radius: 8px;
     }
 
@@ -112,9 +112,46 @@
       padding: 10px;
       border-radius: 4px;
       overflow-x: auto;
+      overflow-y: auto;
+      /* ✅ เพิ่มเลื่อนแนวตั้ง */
       white-space: pre-wrap;
       word-wrap: break-word;
       text-align: left;
+      max-height: 250px;
+      /* ✅ จำกัดความสูงสูงสุด */
+    }
+
+    pre::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    pre::-webkit-scrollbar-thumb {
+      background: #bbb;
+      border-radius: 4px;
+    }
+
+    pre::-webkit-scrollbar-thumb:hover {
+      background: #999;
+    }
+
+    /* 🎨 สีของคะแนนแต่ละประเภท */
+    .score-ai {
+      color: #1976d2;
+      /* น้ำเงิน */
+      font-weight: bold;
+    }
+
+    .score-teacher {
+      color: #2e7d32;
+      /* เขียว */
+      font-weight: bold;
+    }
+
+    /* เพิ่มการจัดศูนย์คะแนนในตาราง */
+    .score-cell {
+      text-align: center;
+      font-weight: bold;
     }
   </style>
 </head>
@@ -127,7 +164,7 @@
       <a href="check_exam.html">ตรวจข้อสอบ</a>
       <a href="view_scores.html">ผลคะแนน</a>
       <a href="profile_user.html">จัดการผู้ใช้งาน</a>
-      <a href="contect_admin.html">ติดต่อแอดมิน</a>
+      <a href="contect_admin.html">ติดต่อผู้ดูแลระบบ</a>
       <a href="login.html">ออกจากระบบ</a>
     </div>
   </div>
@@ -149,13 +186,16 @@
           <option value="ยังไม่ได้ตรวจ">ยังไม่ได้ตรวจ</option>
         </select>
       </label>
-   
+
       <label>นักเรียน:
         <select id="student">
           <option value="">-- เลือกรหัสนักเรียน --</option>
         </select>
       </label>
       <button onclick="loadStudentData()">ดูผล</button>
+
+      <!-- ✅ เพิ่มบรรทัดนี้ -->
+      <button onclick="downloadCSV()">📥 ดาวน์โหลดคะแนนที่ตรวจแล้วทั้งหมด (CSV)</button>
     </div>
 
     <p><strong>รหัสนักเรียน:</strong> <span id="studentId"></span></p>
@@ -184,18 +224,20 @@
   </div>
 
   <script>
+    // ✅ ใช้ key ใหม่จาก localStorage
     let examYear = localStorage.getItem("exam_year");
-    let examGrade = localStorage.getItem("exam_grade");
+    let examGradeName = localStorage.getItem("exam_grade_name");  // ✅ ชื่อเต็ม เช่น "มัธยมศึกษาปีที่ 3"
+    let examGradeId = localStorage.getItem("exam_grade_id");      // ✅ รหัส เช่น "M3"
 
     // แสดงค่าให้ผู้ใช้เห็น
     document.getElementById("displayYear").textContent = examYear || "-";
-    document.getElementById("displayGroup").textContent = examGrade || "-";
+    document.getElementById("displayGroup").textContent = examGradeName || "-";
 
     let allData = [];
 
     // โหลด filters ตอนเปิดหน้า
     document.addEventListener("DOMContentLoaded", async () => {
-      if (!examYear || !examGrade) {
+      if (!examYear || !examGradeId) {
         alert("⚠️ ยังไม่ได้ตั้งค่าปีการศึกษาและระดับชั้น กรุณากลับไปที่หน้าตั้งค่าข้อสอบ");
         window.location.href = "exam_setup.html";
         return;
@@ -206,35 +248,82 @@
         if (!res.ok) throw new Error("โหลดข้อมูลไม่สำเร็จ");
         allData = await res.json();
 
-        // ฟิกกรองตามปีการศึกษาและชั้นเรียน
-        allData = allData.filter(d => d.exam_year == examYear && d.group_id == examGrade);
+        // ✅ กรองข้อมูลตามปีและชั้น (ใช้ examGradeId ที่เป็นรหัส)
+        allData = allData.filter(d =>
+          String(d.exam_year) === String(examYear) &&
+          String(d.group_id) === String(examGradeId)
+        );
 
-        const statusSelect = document.getElementById("statusFilter");
-        const studentSelect = document.getElementById("student");
+        console.log("📊 ข้อมูลที่กรองได้:", allData.length, "รายการ");
 
-        // โหลด dropdown นักเรียน
-        studentSelect.innerHTML = '<option value="">-- เลือกรหัสนักเรียน --</option>';
-        allData.forEach(s => {
-          const opt = document.createElement("option");
-          opt.value = s.answer_id;
-          opt.textContent = s.student_id;
-          studentSelect.appendChild(opt);
-        });
+        // ✅ โหลด dropdown ครั้งแรก
+        updateStudentDropdown();
+
+        // ✅ โหลดใหม่เมื่อเปลี่ยนสถานะ
+        document.getElementById("statusFilter").addEventListener("change", updateStudentDropdown);
 
       } catch (err) {
-        alert(err.message);
+        alert("โหลดข้อมูลไม่สำเร็จ: " + err.message);
       }
     });
 
+    function updateStudentDropdown() {
+      const statusFilter = document.getElementById("statusFilter").value;
+      const studentSelect = document.getElementById("student");
 
-    // โหลดข้อมูลนักเรียน
+      studentSelect.innerHTML = '<option value="">-- เลือกรหัสนักเรียน --</option>';
+
+      let filtered = [...allData];
+      if (statusFilter) {
+        if (statusFilter === "ตรวจแล้ว")
+          filtered = filtered.filter(d => d.status === "ตรวจแล้ว");
+        else if (statusFilter === "ยังไม่ได้ตรวจ")
+          filtered = filtered.filter(d => d.status !== "ตรวจแล้ว");
+      }
+
+      filtered.forEach(s => {
+        const opt = document.createElement("option");
+        opt.value = s.answer_id;
+        opt.textContent = `${s.student_id} (${s.status})`;
+        studentSelect.appendChild(opt);
+      });
+
+      console.log("🔍 นักเรียนที่โหลด:", filtered.length, "คน");
+    }
+
+    // ✅ แก้ไขฟังก์ชัน downloadCSV ให้ใช้ examGradeId
+    async function downloadCSV() {
+      if (!examYear || !examGradeId) {
+        alert("⚠️ กรุณาเลือกปีการศึกษาและระดับชั้นก่อนดาวน์โหลด");
+        return;
+      }
+
+      try {
+        const res = await fetch(
+          `http://127.0.0.1:8000/api/download-checked-csv?exam_year=${examYear}&group_id=${examGradeId}`
+        );
+        if (!res.ok) throw new Error("ไม่สามารถดาวน์โหลดไฟล์ได้");
+
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `checked_scores_${examGradeId}_${examYear}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } catch (err) {
+        alert("❌ ดาวน์โหลดไม่สำเร็จ: " + err.message);
+      }
+    }
+
+    // โหลดข้อมูลนักเรียน (ส่วนนี้ไม่ต้องแก้)
     async function loadStudentData() {
       const answerId = document.getElementById("student").value;
       if (!answerId) {
         alert("กรุณาเลือกนักเรียน");
         return;
       }
-
       try {
         const res = await fetch(`http://127.0.0.1:8000/api/view-score/${answerId}`);
         if (!res.ok) throw new Error("ไม่สามารถโหลดข้อมูลได้");
@@ -242,8 +331,6 @@
 
         // --- แสดงข้อมูลทั่วไป ---
         document.getElementById("studentId").textContent = data.student_id;
-        document.getElementById("groupId").textContent = data.group_id;
-        document.getElementById("examYear").textContent = data.exam_year;
         document.getElementById("status").textContent = data.status;
         document.getElementById("status").className = "status " + (data.status === 'ตรวจแล้ว' ? 'checked' : 'unchecked');
         document.getElementById("essayText").textContent = data.essay_text || "";
@@ -307,7 +394,7 @@
           }
         });
 
-        console.log("📊 คะแนนรวม AI:", totalAIScore);
+        console.log("📊 คะแนนรวม:", totalAIScore);
         document.getElementById("score").textContent = totalAIScore.toFixed(1);
 
         // ========== สร้างตาราง ==========
@@ -321,7 +408,7 @@
           { type: 'header', text: '--- ข้อที่ 2: การแสดงความคิดเห็น (20 คะแนน) ---' },
           "s7", "s8", "s9", "s10", "s11", "s12", "s13",
           { type: 'summary', part: 2 },
-          { type: 'grand_total' }  // 🔥 เพิ่มคะแนนรวมทั้งหมด
+          { type: 'grand_total' }
         ];
 
         const criteriaNameMapping = {
@@ -352,23 +439,26 @@
               const headerRow = document.createElement("tr");
               headerRow.innerHTML = `<td colspan="5" style="background-color: #e9ecef; font-weight: bold; text-align: center;">${item.text}</td>`;
               feedbackTable.appendChild(headerRow);
+              return;
             }
-            else if (item.type === 'summary') {
+
+            if (item.type === 'summary') {
               const part = `part${item.part}`;
               const summaryRow = document.createElement("tr");
               summaryRow.style.background = "#f0f8ff";
               summaryRow.style.fontWeight = "bold";
               summaryRow.innerHTML = `
-            <td>คะแนนรวมข้อที่ ${item.part}</td>
-            <td class="score-cell score-ai">${totals.ai[part].toFixed(1)}</td>
-            <td class="score-cell score-teacher">${totals.teacher1[part] > 0 ? totals.teacher1[part].toFixed(1) : '-'}</td>
-            <td class="score-cell score-teacher">${totals.teacher2[part] > 0 ? totals.teacher2[part].toFixed(1) : '-'}</td>
-            <td>-</td>
-          `;
+                <td>คะแนนรวมข้อที่ ${item.part}</td>
+                <td class="score-cell score-ai">${totals.ai[part].toFixed(1)}</td>
+                <td class="score-cell score-teacher">${totals.teacher1[part] > 0 ? totals.teacher1[part].toFixed(1) : '-'}</td>
+                <td class="score-cell score-teacher">${totals.teacher2[part] > 0 ? totals.teacher2[part].toFixed(1) : '-'}</td>
+                <td>-</td>
+              `;
               feedbackTable.appendChild(summaryRow);
+              return;
             }
-            // 🔥 เพิ่มคะแนนรวมทั้งหมด
-            else if (item.type === 'grand_total') {
+
+            if (item.type === 'grand_total') {
               const grandTotalRow = document.createElement("tr");
               grandTotalRow.style.background = "#d4edda";
               grandTotalRow.style.fontWeight = "bold";
@@ -379,55 +469,58 @@
               const totalT2 = totals.teacher2.part1 + totals.teacher2.part2;
 
               grandTotalRow.innerHTML = `
-            <td style="text-align: center; background-color: #28a745; color: white;">🏆 คะแนนรวมทั้งหมด (30 คะแนน)</td>
-            <td class="score-cell" style="background-color: #d1ecf1; color: #004085; font-size: 18px;">${totalAI.toFixed(1)}</td>
-            <td class="score-cell" style="background-color: #d4edda; color: #155724; font-size: 18px;">${totalT1 > 0 ? totalT1.toFixed(1) : '-'}</td>
-            <td class="score-cell" style="background-color: #d4edda; color: #155724; font-size: 18px;">${totalT2 > 0 ? totalT2.toFixed(1) : '-'}</td>
-            <td style="background-color: #d4edda;">-</td>
-          `;
+                <td style="text-align: center; background-color: #28a745; color: white;">🏆 คะแนนรวมทั้งหมด (30 คะแนน)</td>
+                <td class="score-cell score-ai" style="background-color: #d1ecf1; color: #004085; font-size: 18px;">${totalAI.toFixed(1)}</td>
+                <td class="score-cell score-teacher" style="background-color: #d4edda; color: #155724; font-size: 18px;">${totalT1 > 0 ? totalT1.toFixed(1) : '-'}</td>
+                <td class="score-cell score-teacher" style="background-color: #d4edda; color: #155724; font-size: 18px;">${totalT2 > 0 ? totalT2.toFixed(1) : '-'}</td>
+                <td style="background-color: #d4edda;">-</td>
+              `;
               feedbackTable.appendChild(grandTotalRow);
+              return;
             }
-            return;
           }
 
           const sKey = item;
           const criteriaData = parsedDescription[sKey];
 
-          if (criteriaData) {
-            const criteriaName = criteriaNameMapping[sKey] || sKey;
-            const aiScore = parseFloat(criteriaData.score ?? 0);
-
-            const part = parseInt(sKey.substring(1)) <= 6 ? 'part1' : 'part2';
-            totals.ai[part] += aiScore;
-
-            const t1ScoreStr = teacherScores?.teacher1?.[sKey];
-            const t2ScoreStr = teacherScores?.teacher2?.[sKey];
-            const teacher1 = t1ScoreStr != null && t1ScoreStr !== '' ? parseFloat(t1ScoreStr).toFixed(1) : "-";
-            const teacher2 = t2ScoreStr != null && t2ScoreStr !== '' ? parseFloat(t2ScoreStr).toFixed(1) : "-";
-
-            if (teacher1 !== '-') totals.teacher1[part] += parseFloat(teacher1);
-            if (teacher2 !== '-') totals.teacher2[part] += parseFloat(teacher2);
-
-            let details = "-";
-            if (criteriaData.feedback) {
-              try {
-                const feedbackObj = JSON.parse(criteriaData.feedback);
-                details = JSON.stringify(feedbackObj, null, 2);
-              } catch (e) {
-                details = criteriaData.feedback;
-              }
-            }
-
-            const row = document.createElement("tr");
-            row.innerHTML = `
-          <td>${criteriaName}</td>
-          <td class="score-cell score-ai">${aiScore.toFixed(1)}</td>
-          <td class="score-cell score-teacher">${teacher1}</td>
-          <td class="score-cell score-teacher">${teacher2}</td>
-          <td><pre>${details}</pre></td>
-        `;
-            feedbackTable.appendChild(row);
+          if (!criteriaData) {
+            console.warn(`⚠️ ไม่มีข้อมูลสำหรับเกณฑ์: ${sKey}`);
+            return;
           }
+
+          const criteriaName = criteriaNameMapping[sKey] || sKey;
+          const aiScore = parseFloat(criteriaData.score ?? 0);
+
+          const part = parseInt(sKey.substring(1)) <= 6 ? 'part1' : 'part2';
+          totals.ai[part] += aiScore;
+
+          const t1ScoreStr = teacherScores?.teacher1?.[sKey];
+          const t2ScoreStr = teacherScores?.teacher2?.[sKey];
+          const teacher1 = (t1ScoreStr != null && t1ScoreStr !== '') ? parseFloat(t1ScoreStr).toFixed(1) : "-";
+          const teacher2 = (t2ScoreStr != null && t2ScoreStr !== '') ? parseFloat(t2ScoreStr).toFixed(1) : "-";
+
+          if (teacher1 !== '-') totals.teacher1[part] += parseFloat(teacher1);
+          if (teacher2 !== '-') totals.teacher2[part] += parseFloat(teacher2);
+
+          let details = "-";
+          if (criteriaData.feedback) {
+            try {
+              const feedbackObj = typeof criteriaData.feedback === 'string' ? JSON.parse(criteriaData.feedback) : criteriaData.feedback;
+              details = JSON.stringify(feedbackObj, null, 2);
+            } catch (e) {
+              details = String(criteriaData.feedback);
+            }
+          }
+
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td style="text-align:left">${criteriaName}</td>
+            <td class="score-cell score-ai">${aiScore.toFixed(1)}</td>
+            <td class="score-cell score-teacher">${teacher1}</td>
+            <td class="score-cell score-teacher">${teacher2}</td>
+            <td><pre>${details}</pre></td>
+          `;
+          feedbackTable.appendChild(row);
         });
 
       } catch (error) {
@@ -436,8 +529,7 @@
       }
     }
   </script>
+
 </body>
 
 </html>
-
-
