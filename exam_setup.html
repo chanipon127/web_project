@@ -11,7 +11,6 @@
     .form-group { margin-bottom:18px; }
     .form-group label { display:block; margin-bottom:6px; font-weight:bold; }
     .form-group select, .form-group input { width:100%; padding:10px; border:1px solid #ddd; border-radius:8px; font-size:14px; }
-    .form-group select:focus, .form-group input:focus { border-color:#4c65af; outline:none; }
     button { width:100%; padding:12px; background:#4c65af; color:white; border:none; border-radius:10px; cursor:pointer; font-size:15px; font-weight:bold; }
     button:hover { background:#3c5090; }
   </style>
@@ -24,13 +23,14 @@
         <label for="grade">ระดับชั้น</label>
         <select id="grade" name="grade" required>
           <option value="">-- กรุณาเลือกระดับชั้น --</option>
-          <option value="ประถมศึกษาปีที่ 6">ประถมศึกษาปีที่ 6</option>
-          <option value="มัธยมศึกษาปีที่ 3">มัธยมศึกษาปีที่ 3</option>
+          <option value="P6">ประถมศึกษาปีที่ 6</option>
+          <option value="M3">มัธยมศึกษาปีที่ 3</option>
+          <option value="M6">มัธยมศึกษาปีที่ 6</option>
         </select>
       </div>
       <div class="form-group">
         <label for="year">ปีการศึกษา</label>
-        <input type="text" id="year" name="year" placeholder="เช่น 2568" required>
+        <input type="text" id="year" name="year" placeholder="เช่น 2568" required pattern="\d{4}">
       </div>
       <button type="submit">ดำเนินการต่อ</button>
     </form>
@@ -39,14 +39,17 @@
   <script>
     document.getElementById("examSetupForm").addEventListener("submit", function(e){
       e.preventDefault();
-      const grade = document.getElementById("grade").value;
+      
+      const gradeSelect = document.getElementById("grade");
+      const gradeValue = gradeSelect.value;  // รหัสกลุ่ม (P6, M3, M6)
+      const gradeText = gradeSelect.options[gradeSelect.selectedIndex].text; // ชื่อเต็ม
       const year = document.getElementById("year").value;
 
-      // เก็บค่าไว้ใน localStorage
-      localStorage.setItem("exam_grade", grade);
+      // บันทึกทั้งรหัสและชื่อเต็ม
+      localStorage.setItem("exam_grade_id", gradeValue);  // P6, M3, M6
+      localStorage.setItem("exam_grade_name", gradeText); // ประถมศึกษาปีที่ 6
       localStorage.setItem("exam_year", year);
 
-      // ไปหน้าหลักของ examiner ต่อ
       window.location.href = "homepage_user.html";
     });
   </script>
