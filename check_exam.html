@@ -172,54 +172,62 @@
     let allData = [];
     let currentPage = 1;
     const itemsPerPage = 50;
+    let examYear = null;
+    let examGroupId = null;
 
-    // โหลดตัวเลือกปี/กลุ่ม
+    // โหลดข้อมูลจาก localStorage และดึงจาก API
     async function loadFilters() {
+      // ✅ อ่านค่าจาก localStorage
+      examYear = localStorage.getItem("exam_year");
+      examGroupId = localStorage.getItem("exam_grade_id"); // P6, M3, M6
+      const examGradeName = localStorage.getItem("exam_grade_name");
+
+      // ✅ แสดงค่าที่เลือกไว้
+      document.getElementById("yearDisplay").textContent = examYear || "-";
+      document.getElementById("gradeDisplay").textContent = examGradeName || "-";
+
+      if (!examYear || !examGroupId) {
+        alert("กรุณาตั้งค่าข้อสอบก่อน");
+        window.location.href = "homepage_user.html";
+        return;
+      }
+
       try {
+        // ✅ ดึงข้อมูลทั้งหมดจาก API
         const res = await fetch("http://127.0.0.1:8000/api/answers-all");
         if (!res.ok) throw new Error("โหลดข้อมูลไม่สำเร็จ");
-        allData = await res.json();
+
+        const allAnswers = await res.json();
+
+        // ✅ กรองเฉพาะข้อมูลที่ตรงกับปีและชั้นเรียน
+        allData = allAnswers.filter(item =>
+          String(item.exam_year) === examYear &&
+          String(item.group_id) === examGroupId
+        );
+
+        // ✅ ถ้าไม่มีข้อมูล แสดงข้อความ
+        if (allData.length === 0) {
+          document.getElementById("studentTableBody").innerHTML =
+            `<tr><td colspan="5" style="text-align:center; padding:20px; color:#999;">
+          ⚠️ ไม่มีข้อมูลนักเรียนสำหรับ ${examGradeName} ปีการศึกษา ${examYear}
+        </td></tr>`;
+          document.getElementById("pagination").innerHTML = "";
+          return;
+        }
 
         sessionStorage.setItem("allData", JSON.stringify(allData));
-        populateFilters();
-        restoreSelectionsAndTable();
+        loadData();
+
       } catch (err) {
-        alert("โหลดตัวเลือกปี/ระดับชั้นเรียนไม่สำเร็จ: " + err.message);
+        alert("โหลดข้อมูลไม่สำเร็จ: " + err.message);
       }
     }
 
-    function populateFilters() {
-      const years = [...new Set(allData.map(item => item.exam_year))];
-      const yearSelect = document.getElementById("year");
-      yearSelect.innerHTML = '<option value="">-- เลือกปีการศึกษา --</option>';
-      years.forEach(y => {
-        const option = document.createElement("option");
-        option.value = y;
-        option.textContent = y;
-        yearSelect.appendChild(option);
-      });
-
-      const groups = [...new Set(allData.map(item => item.group_id))];
-      const groupSelect = document.getElementById("group");
-      groupSelect.innerHTML = '<option value="">-- เลือกระดับชั้นเรียน --</option>';
-      groups.forEach(g => {
-        const option = document.createElement("option");
-        option.value = g;
-        option.textContent = g;
-        groupSelect.appendChild(option);
-      });
-    }
-
-
+    // โหลดข้อมูลตามสถานะ
     function loadData() {
-      const year = document.getElementById("year").value;
-      const group = document.getElementById("group").value;
       const status = document.getElementById("status").value;
-
-
       let data = [...allData];
-      if (year) data = data.filter(item => String(item.exam_year) === year);
-      if (group) data = data.filter(item => String(item.group_id) === grade);
+
       if (status) {
         if (status === "ตรวจแล้ว")
           data = data.filter(item => item.status === "ตรวจแล้ว");
@@ -230,13 +238,14 @@
       renderTable(data);
     }
 
-
     function renderTable(data) {
       const tbody = document.getElementById("studentTableBody");
       tbody.innerHTML = "";
 
       if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5">ไม่พบข้อมูล</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:#999;">
+      ไม่พบข้อมูลที่ตรงกับเงื่อนไข
+    </td></tr>`;
         document.getElementById("pagination").innerHTML = "";
         return;
       }
@@ -248,18 +257,18 @@
       pageData.forEach(ans => {
         const row = document.createElement("tr");
         row.innerHTML = `
-          <td>${ans.student_id}</td>
-          <td>${ans.group_id}</td>
-          <td>${ans.exam_year}</td>
-          <td class="status-col ${ans.status === "ตรวจแล้ว" ? "status-checked" : "status-unchecked"}">
-            ${ans.status}
-          </td>
-          <td>
-            ${ans.status === "ตรวจแล้ว"
+      <td>${ans.student_id}</td>
+      <td>${ans.group_id}</td>
+      <td>${ans.exam_year}</td>
+      <td class="status-col ${ans.status === "ตรวจแล้ว" ? "status-checked" : "status-unchecked"}">
+        ${ans.status}
+      </td>
+      <td>
+        ${ans.status === "ตรวจแล้ว"
             ? `<button onclick="viewScore(${ans.answer_id})">ดูผล</button>`
             : `<button onclick="startCheck(${ans.answer_id}, this)">ตรวจ</button>`}
-          </td>
-        `;
+      </td>
+    `;
         tbody.appendChild(row);
       });
 
@@ -349,30 +358,18 @@
     }
 
     function restoreSelectionsAndTable() {
-      const savedYear = sessionStorage.getItem("selectedYear");
-      const savedGroup = sessionStorage.getItem("selectedGroup");
       const savedStatus = sessionStorage.getItem("selectedStatus");
       if (savedStatus) document.getElementById("status").value = savedStatus;
-
-      if (savedYear) document.getElementById("year").value = savedYear;
-      if (savedGroup) document.getElementById("group").value = savedGroup;
-      if (savedYear || savedGroup) loadData();
+      loadData();
     }
 
+    // ✅ เริ่มต้นเมื่อโหลดหน้า
     document.addEventListener("DOMContentLoaded", () => {
-      const saved = sessionStorage.getItem("allData");
-      if (saved) {
-        allData = JSON.parse(saved);
-        populateFilters();
-        restoreSelectionsAndTable();
-      } else {
-        loadFilters();
-      }
-      // ✅ แสดงค่าปีและชั้นเรียนจาก localStorage
-      document.getElementById("yearDisplay").textContent = localStorage.getItem("exam_year") || "-";
-      document.getElementById("gradeDisplay").textContent = localStorage.getItem("exam_grade") || "-";
+      loadFilters();
     });
+
   </script>
+
 </body>
 
 </html>
