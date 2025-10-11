@@ -128,9 +128,9 @@
         const role = localStorage.getItem('role');
         const menuContainer = document.getElementById('menu-container');
 
-        // ถ้าเป็น examiner ให้แสดงระดับชั้นกับปีการศึกษา
+        // ✅ ถ้าเป็น examiner ให้แสดงระดับชั้นกับปีการศึกษา
         if (role === 'examiner') {
-            const grade = localStorage.getItem("exam_grade") || "-";
+            const grade = localStorage.getItem("exam_grade_name") || "-";  // ✅ แก้ตรงนี้
             const year = localStorage.getItem("exam_year") || "-";
             document.getElementById("exam-info").textContent = `📘 ระดับชั้น ${grade} | ปีการศึกษา ${year}`;
 
@@ -148,7 +148,8 @@
 
             changeBtn.onclick = function () {
                 // ล้างค่าเก่า
-                localStorage.removeItem("exam_grade");
+                localStorage.removeItem("exam_grade_id");    // ✅ แก้ตรงนี้
+                localStorage.removeItem("exam_grade_name");  // ✅ แก้ตรงนี้
                 localStorage.removeItem("exam_year");
                 // กลับไปหน้าตั้งค่าใหม่
                 window.location.href = "exam_setup.html";
@@ -157,23 +158,22 @@
             document.getElementById("change-year-container").appendChild(changeBtn);
         }
 
-
         if (role === 'examiner' || role === 'teacher') {
             const menuItems = [
                 { href: 'check_exam.html', img: 'ตรวจข้อสอบ.png', label: 'ตรวจข้อสอบ' },
                 { href: 'view_scores.html', img: 'ดูคะแนน.png', label: 'ดูคะแนน' },
                 { href: 'profile_user.html', img: 'profile.png', label: 'โปรไฟล์ของฉัน' },
-                { href: 'contect_admin.html', img: 'ติดต่อadmin.png', label: 'ติดต่อAdmin' }
+                { href: 'contact_admin.html', img: 'ติดต่อadmin.png', label: 'ติดต่อผู้ดูแลระบบ' }
             ];
             menuItems.forEach(item => {
                 const div = document.createElement('div');
                 div.className = 'image-item';
                 div.innerHTML = `
-            <a href="${item.href}">
-                <img src="${item.img}" alt="${item.label}">
-            </a>
-            <div>${item.label}</div>
-        `;
+                <a href="${item.href}">
+                    <img src="${item.img}" alt="${item.label}">
+                </a>
+                <div>${item.label}</div>
+            `;
                 menuContainer.appendChild(div);
             });
         } else if (role === 'admin') {
@@ -188,11 +188,11 @@
                 const div = document.createElement('div');
                 div.className = 'image-item';
                 div.innerHTML = `
-            <a href="${item.href}">
-                <img src="${item.img}" alt="${item.label}">
-            </a>
-            <div>${item.label}</div>
-        `;
+                <a href="${item.href}">
+                    <img src="${item.img}" alt="${item.label}">
+                </a>
+                <div>${item.label}</div>
+            `;
                 menuContainer.appendChild(div);
             });
         }
